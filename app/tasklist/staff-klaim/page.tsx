@@ -3,31 +3,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
-type ClaimItem = {
-  user?: string
-  jenis_ekspedisi?: string
-  date_added?: string
-  bulan?: string
-  tgl_pengajuan_ez?: string
-  tgl_approve_ekspedisi?: string
-  client_name?: string
-  no_awb?: string
-  kategori_case?: string
-  update_status?: string
-  final_status?: string
-  keterangan?: string
-  tgl_mutasi?: string
-  nominal_claim?: number | string
-  sla?: string
-  [key: string]: any
-}
-
-// Ganti URL di bawah ini dengan URL Web App dari Google Apps Script Anda
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec'
-
 export default function StaffKlaimDashboard() {
   const router = useRouter()
-  const [data, setData] = useState<ClaimItem[]>([])
+  const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [selectedEkspedisi, setSelectedEkspedisi] = useState<string>('All')
@@ -43,16 +21,16 @@ export default function StaffKlaimDashboard() {
   const fetchDataFromSheet = async () => {
     setLoading(true)
     try {
-      if (GOOGLE_SCRIPT_URL.includes('MASUKKAN_URL')) {
-        console.warn('URL Google Apps Script belum dikonfigurasi.')
+      const url = 'https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec'
+      if (url.includes('MASUKKAN_URL')) {
         setLoading(false)
         return
       }
-      const res = await fetch(GOOGLE_SCRIPT_URL)
+      const res = await fetch(url)
       const result = await res.json()
       setData(result)
     } catch (error) {
-      console.error('Gagal mengambil data dari Google Sheets:', error)
+      console.error('Gagal mengambil data:', error)
     } finally {
       setLoading(false)
     }
@@ -62,7 +40,6 @@ export default function StaffKlaimDashboard() {
     fetchDataFromSheet()
   }, [])
 
-  // Statistik Keuangan & Kasus
   const stats = useMemo(() => {
     const totalKasus = data.length
     const totalPengajuan = data.filter((item) => item.tgl_pengajuan_ez).length
@@ -71,25 +48,19 @@ export default function StaffKlaimDashboard() {
     let totalRejectCancel = 0
 
     data.forEach((item) => {
-      const fStatus = (item.final_status || '').toLowerCase()
+      const fStatus = String(item.final_status || '').toLowerCase()
       if (fStatus.includes('approved')) {
-        const nominal = Number(item.nominal_claim) || 0
-        totalRupiahApproved += nominal
+        const rawNominal = item.nominal_claim ?? 0
+        totalRupiahApproved += Number(rawNominal) || 0
       }
       if (fStatus.includes('cancel') || fStatus.includes('reject')) {
         totalRejectCancel += 1
       }
     })
 
-    return {
-      totalKasus,
-      totalPengajuan,
-      totalRupiahApproved,
-      totalRejectCancel,
-    }
+    return { totalKasus, totalPengajuan, totalRupiahApproved, totalRejectCancel }
   }, [data])
 
-  // Filter Data Berdasarkan Pencarian & Dropdown
   const filteredData = useMemo(() => {
     return data.filter((item) => {
       const awb = String(item.no_awb || '').toLowerCase()
@@ -105,8 +76,8 @@ export default function StaffKlaimDashboard() {
     })
   }, [data, searchQuery, selectedEkspedisi, selectedCase])
 
-  const formatRupiah = (val: number | string) => {
-    const num = Number(val) || 0
+  const formatRupiah = (val: any) => {
+    const num = Number(val ?? 0) || 0
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num)
   }
 
@@ -123,8 +94,6 @@ export default function StaffKlaimDashboard() {
 
   return (
     <main className="p-8 max-w-[1700px] w-full mx-auto space-y-6 pb-24 bg-zinc-50/50 min-h-screen">
-      
-      {/* Header & Title */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight text-zinc-900">
@@ -134,19 +103,15 @@ export default function StaffKlaimDashboard() {
             Real-time synchronization data dari Google Sheets operasional klaim.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchDataFromSheet}
-            className="px-3.5 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>↻</span>
-            <span>Sinkronisasi Data</span>
-          </button>
-        </div>
+        <button
+          onClick={fetchDataFromSheet}
+          className="px-3.5 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <span>↻</span>
+          <span>Sinkronisasi Data</span>
+        </button>
       </div>
 
-      {/* Metric Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-2xs space-y-1">
           <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
@@ -166,7 +131,6 @@ export default function StaffKlaimDashboard() {
         </div>
       </div>
 
-      {/* Toolbar & Filter */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 rounded-lg border border-zinc-200/90 shadow-2xs">
         <div className="relative flex-1 max-w-sm">
           <input
@@ -212,7 +176,6 @@ export default function StaffKlaimDashboard() {
         </div>
       </div>
 
-      {/* Tabel Data Klaim */}
       <div className="bg-white border border-zinc-200/90 rounded-lg shadow-2xs overflow-hidden">
         {loading ? (
           <div className="py-24 text-center text-xs text-zinc-400 font-bold uppercase tracking-widest animate-pulse">
@@ -221,7 +184,6 @@ export default function StaffKlaimDashboard() {
         ) : filteredData.length === 0 ? (
           <div className="py-24 text-center text-xs text-zinc-500 font-medium space-y-1">
             <p className="font-bold text-zinc-700">Tidak ada data klaim ditemukan</p>
-            <p className="text-zinc-400 text-[11px]">Pastikan Google Apps Script sudah terdeploy dengan benar.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -246,14 +208,10 @@ export default function StaffKlaimDashboard() {
 
                   return (
                     <tr key={idx} className="hover:bg-zinc-50/70 transition">
-                      
-                      {/* No AWB & Client */}
                       <td className="py-3 px-4 align-middle">
                         <div className="font-mono font-bold text-zinc-900">{item.no_awb || '-'}</div>
                         <div className="text-[11px] text-zinc-500 font-medium">{item.client_name || '-'}</div>
                       </td>
-
-                      {/* Ekspedisi & Kategori Kasus */}
                       <td className="py-3 px-4 align-middle space-y-1">
                         <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200">
                           {item.jenis_ekspedisi || '-'}
@@ -264,43 +222,30 @@ export default function StaffKlaimDashboard() {
                           </span>
                         </div>
                       </td>
-
-                      {/* Update Status */}
                       <td className="py-3 px-4 align-middle">
                         <span className="inline-block px-2.5 py-1 rounded text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200">
                           {item.update_status || 'Open'}
                         </span>
                       </td>
-
-                      {/* Final Status */}
                       <td className="py-3 px-4 align-middle">
                         <span className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold ${isApproved ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : isRejectCancel ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-zinc-100 text-zinc-600 border border-zinc-200'}`}>
                           {item.final_status || 'Belum Putus'}
                         </span>
                       </td>
-
-                      {/* Timeline Tanggal */}
                       <td className="py-3 px-4 align-middle text-[11px] font-mono text-zinc-600 space-y-0.5">
                         <div>📥 Masuk: {formatDateDisplay(item.date_added)}</div>
                         {item.tgl_pengajuan_ez && <div>📤 Ajuan: {formatDateDisplay(item.tgl_pengajuan_ez)}</div>}
                         {item.tgl_mutasi && <div className="text-emerald-700 font-bold">💰 Mutasi: {formatDateDisplay(item.tgl_mutasi)}</div>}
                       </td>
-
-                      {/* Nominal Claim */}
                       <td className="py-3 px-4 align-middle text-right font-mono font-bold text-zinc-900">
                         {formatRupiah(item.nominal_claim)}
                       </td>
-
-                      {/* Keterangan */}
                       <td className="py-3 px-4 align-middle max-w-xs truncate text-zinc-600" title={item.keterangan}>
                         {item.keterangan || '-'}
                       </td>
-
-                      {/* PIC Staff */}
                       <td className="py-3 px-4 align-middle font-semibold text-zinc-700">
                         {item.user || '-'}
                       </td>
-
                     </tr>
                   )
                 })}
@@ -309,7 +254,6 @@ export default function StaffKlaimDashboard() {
           </div>
         )}
       </div>
-
     </main>
   )
 }
