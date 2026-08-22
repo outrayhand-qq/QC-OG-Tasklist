@@ -49,9 +49,11 @@ export default function StaffKlaimDashboard() {
     fetchDataFromSheet()
   }, [])
 
-  // Helper cerdas mencari key tanpa terpengaruh huruf besar/kecil atau spasi/simbol
-  const getVal = (item: any, possibleKeys: string[]) => {
+  // Helper super tangguh: Mencari berdasarkan key, atau langsung ambil kolom ke-colIndex (0 untuk User/Kolom A)
+  const getVal = (item: any, possibleKeys: string[], colIndex?: number) => {
     const itemKeys = Object.keys(item)
+    
+    // 1. Cari berdasarkan nama key (diabaikan spasi/huruf besar-kecil)
     for (const key of possibleKeys) {
       const cleanKey = key.toLowerCase().replace(/[\s_]/g, '')
       const found = itemKeys.find(
@@ -61,16 +63,23 @@ export default function StaffKlaimDashboard() {
         return item[found]
       }
     }
+
+    // 2. Jika tidak ketemu berdasarkan key, ambil langsung berdasarkan urutan kolom (index)
+    if (colIndex !== undefined && Array.isArray(itemKeys) && itemKeys.length > colIndex) {
+      const val = item[itemKeys[colIndex]]
+      if (val !== null && val !== '' && val !== 'undefined') {
+        return val
+      }
+    }
+
     return ''
   }
 
-  // Ekstraksi nilai bulan yang lebih cerdas (mendukung teks bulan maupun format tanggal)
+  // Ekstraksi nilai bulan yang cerdas
   const extractMonth = (item: any) => {
-    // Cek langsung kolom bulan
     let val = String(getVal(item, ['bulan', 'month']))
     if (val && val !== '-' && val.toLowerCase() !== 'invalid date') return val.trim()
 
-    // Jika kolom bulan kosong, coba ambil dari tanggal (date_added)
     const dateVal = getVal(item, ['date_added', 'dateadded', 'tgl_pengajuan_ez'])
     if (dateVal) {
       try {
@@ -86,10 +95,10 @@ export default function StaffKlaimDashboard() {
     return ''
   }
 
-  // Opsi Dropdown Unik (User & Bulan & Status)
+  // Opsi Dropdown Unik (User dipaksa ambil dari indeks 0 / Kolom A)
   const uniqueUsers = useMemo(() => {
-    const list = data.map(item => String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff'])).trim())
-    return Array.from(new Set(list)).filter(val => val && val !== 'undefined' && val !== 'null' && val !== '-').sort()
+    const list = data.map(item => String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff'], 0)).trim())
+    return Array.from(new Set(list)).filter(val => val && val !== 'undefined' && val !== 'null' && val !== '-' && val.length < 30).sort()
   }, [data])
 
   const uniqueBulan = useMemo(() => {
@@ -111,7 +120,7 @@ export default function StaffKlaimDashboard() {
       
       const ekspedisiVal = String(getVal(item, ['jenis_ekspedisi', 'jenisekspedisi'])).trim()
       const caseVal = String(getVal(item, ['kategori_case', 'kategoricase'])).trim()
-      const userVal = String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff'])).trim()
+      const userVal = String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff'], 0)).trim()
       const bulanVal = extractMonth(item)
       const statusVal = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal'])).trim()
 
@@ -202,7 +211,7 @@ export default function StaffKlaimDashboard() {
         </button>
       </div>
 
-      {/* Metric Summary Cards (Dinamis Mengikuti Filter) */}
+      {/* Metric Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-2xs space-y-1">
           <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
@@ -319,7 +328,7 @@ export default function StaffKlaimDashboard() {
                     const tglMutasiVal = getVal(item, ['tgl_mutasi', 'tglmutasi'])
                     const nominalVal = getVal(item, ['nominal_claim', 'nominalclaim']) || 0
                     const ketText = getVal(item, ['keterangan']) || '-'
-                    const userText = getVal(item, ['user', 'pic', 'staff', 'namastaff']) || '-'
+                    const userText = getVal(item, ['user', 'pic', 'staff', 'namastaff'], 0) || '-'
 
                     return (
                       <tr key={idx} className="hover:bg-zinc-50/70 transition">
