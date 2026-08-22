@@ -54,16 +54,37 @@ export default function StaffKlaimDashboard() {
       const found = Object.keys(item).find(
         (k) => k.toLowerCase().replace(/[\s_]/g, '') === key.toLowerCase().replace(/[\s_]/g, '')
       )
-      if (found !== undefined && item[found] !== null && item[found] !== '') {
+      if (found !== undefined && item[found] !== null && item[found] !== '' && item[found] !== 'undefined') {
         return item[found]
       }
     }
     return ''
   }
 
-  const uniqueUsers = useMemo(() => Array.from(new Set(data.map(item => String(getVal(item, ['user']))).filter(Boolean))), [data])
-  const uniqueBulan = useMemo(() => Array.from(new Set(data.map(item => String(getVal(item, ['bulan']))).filter(Boolean))), [data])
-  const uniqueStatus = useMemo(() => Array.from(new Set(data.map(item => String(getVal(item, ['final_status', 'finalstatus']))).filter(Boolean))), [data])
+  // Opsi Dropdown Unik yang Fleksibel & Terurut
+  const uniqueUsers = useMemo(() => {
+    return Array.from(
+      new Set(
+        data.map(item => String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff']))).filter(val => val && val !== 'undefined' && val !== 'null')
+      )
+    ).sort()
+  }, [data])
+
+  const uniqueBulan = useMemo(() => {
+    return Array.from(
+      new Set(
+        data.map(item => String(getVal(item, ['bulan', 'month']))).filter(val => val && val !== 'undefined' && val !== 'null')
+      )
+    ).sort()
+  }, [data])
+
+  const uniqueStatus = useMemo(() => {
+    return Array.from(
+      new Set(
+        data.map(item => String(getVal(item, ['final_status', 'finalstatus', 'statusfinal']))).filter(val => val && val !== 'undefined' && val !== 'null')
+      )
+    ).sort()
+  }, [data])
 
   // 1. FILTER DATA UTAMA
   const filteredData = useMemo(() => {
@@ -73,9 +94,9 @@ export default function StaffKlaimDashboard() {
       const ket = String(getVal(item, ['keterangan'])).toLowerCase()
       const ekspedisiVal = String(getVal(item, ['jenis_ekspedisi', 'jenisekspedisi']))
       const caseVal = String(getVal(item, ['kategori_case', 'kategoricase']))
-      const userVal = String(getVal(item, ['user']))
-      const bulanVal = String(getVal(item, ['bulan']))
-      const statusVal = String(getVal(item, ['final_status', 'finalstatus']))
+      const userVal = String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff']))
+      const bulanVal = String(getVal(item, ['bulan', 'month']))
+      const statusVal = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal']))
 
       const query = searchQuery.toLowerCase()
       const matchesSearch = awb.includes(query) || client.includes(query) || ket.includes(query)
@@ -95,7 +116,7 @@ export default function StaffKlaimDashboard() {
     setCurrentPage(1)
   }, [searchQuery, selectedEkspedisi, selectedCase, selectedUser, selectedBulan, selectedStatus])
 
-  // 2. STATISTIK DINAMIS
+  // 2. STATISTIK DINAMIS (Mengikuti Filter Aktif)
   const stats = useMemo(() => {
     const totalKasus = filteredData.length
     let totalPengajuan = 0
@@ -106,7 +127,7 @@ export default function StaffKlaimDashboard() {
       const tglAjuan = getVal(item, ['tgl_pengajuan_ez', 'tglpengajuanez'])
       if (tglAjuan) totalPengajuan += 1
 
-      const fStatus = String(getVal(item, ['final_status', 'finalstatus'])).toLowerCase()
+      const fStatus = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal'])).toLowerCase()
       if (fStatus.includes('approved')) {
         const nominal = Number(getVal(item, ['nominal_claim', 'nominalclaim'])) || 0
         totalRupiahApproved += nominal
@@ -119,7 +140,7 @@ export default function StaffKlaimDashboard() {
     return { totalKasus, totalPengajuan, totalRupiahApproved, totalRejectCancel }
   }, [filteredData])
 
-  // 3. PAGINATION (Potong data 50 per halaman)
+  // 3. PAGINATION (50 Data Per Halaman)
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
@@ -164,7 +185,7 @@ export default function StaffKlaimDashboard() {
         </button>
       </div>
 
-      {/* Metric Summary Cards */}
+      {/* Metric Summary Cards (Dinamis Mengikuti Filter) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-2xs space-y-1">
           <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
@@ -184,7 +205,7 @@ export default function StaffKlaimDashboard() {
         </div>
       </div>
 
-      {/* Toolbar & Filter */}
+      {/* Toolbar & Filter Lengkap */}
       <div className="flex flex-col gap-3 bg-white p-3 rounded-lg border border-zinc-200/90 shadow-2xs">
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1 max-w-sm">
@@ -239,7 +260,7 @@ export default function StaffKlaimDashboard() {
         </div>
       </div>
 
-      {/* Tabel Data Klaim */}
+      {/* Tabel Data Klaim & Pagination */}
       <div className="bg-white border border-zinc-200/90 rounded-lg shadow-2xs overflow-hidden">
         {loading ? (
           <div className="py-24 text-center text-xs text-zinc-400 font-bold uppercase tracking-widest animate-pulse">
@@ -267,7 +288,7 @@ export default function StaffKlaimDashboard() {
                 </thead>
                 <tbody className="divide-y divide-zinc-100 text-xs text-zinc-800">
                   {paginatedData.map((item, idx) => {
-                    const finalStatText = String(getVal(item, ['final_status', 'finalstatus']) || 'Belum Putus')
+                    const finalStatText = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal']) || 'Belum Putus')
                     const isApproved = finalStatText.toLowerCase().includes('approved')
                     const isRejectCancel = finalStatText.toLowerCase().includes('cancel') || finalStatText.toLowerCase().includes('reject')
 
@@ -281,7 +302,7 @@ export default function StaffKlaimDashboard() {
                     const tglMutasiVal = getVal(item, ['tgl_mutasi', 'tglmutasi'])
                     const nominalVal = getVal(item, ['nominal_claim', 'nominalclaim']) || 0
                     const ketText = getVal(item, ['keterangan']) || '-'
-                    const userText = getVal(item, ['user']) || '-'
+                    const userText = getVal(item, ['user', 'pic', 'staff', 'namastaff']) || '-'
 
                     return (
                       <tr key={idx} className="hover:bg-zinc-50/70 transition">
@@ -330,7 +351,7 @@ export default function StaffKlaimDashboard() {
               </table>
             </div>
 
-            {/* Pagination Controls Bar */}
+            {/* Pagination Controls */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-zinc-50/80 border-t border-zinc-200 text-xs">
               <div className="text-zinc-500 font-medium">
                 Menampilkan <span className="font-bold text-zinc-800">{paginatedData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}</span> sampai <span className="font-bold text-zinc-800">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> dari <span className="font-bold text-zinc-800">{filteredData.length}</span> total data
@@ -347,12 +368,8 @@ export default function StaffKlaimDashboard() {
 
                 <div className="flex items-center gap-1 px-1">
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter(page => {
-                      // Tampilkan halaman pertama, terakhir, dan halaman sekitar current page agar tidak terlalu panjang jika halaman banyak
-                      return page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2)
-                    })
+                    .filter(page => page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2))
                     .map((page, index, arr) => {
-                      // Tambahkan elipsis (...) jika ada lompatan halaman
                       const prevPage = arr[index - 1]
                       const showEllipsisBefore = prevPage && page - prevPage > 1
 
