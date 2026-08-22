@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: 'QC & OG Monitoring',
   description: 'Internal QC&OG Management Dashboard',
   icons: {
-    icon: '/icon.webp',
+    icon: '/favicon.ico',
   },
 }
 
