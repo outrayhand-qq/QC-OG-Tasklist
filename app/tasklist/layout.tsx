@@ -29,7 +29,7 @@ export default function TaskListLayout({
         <div className="space-y-6">
           {/* Logo / Brand */}
           <div>
-            <h2 className="text-base font-black tracking-tight text-zinc-900 leading-tight">
+            <h2 className="text-3xl font-black tracking-tight text-zinc-900 leading-tight">
               QC&Outging
             </h2>
             <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-0.5">

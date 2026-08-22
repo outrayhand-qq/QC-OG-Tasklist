@@ -547,18 +547,20 @@ export default function TeamLeaderConsole() {
                 return (
                   <tr key={task.id} className="hover:bg-zinc-50/60 transition group">
                     
-                    {/* DESKRIPSI TUGAS & IKON EDIT (PENSIL) */}
+                    {/* DESKRIPSI TUGAS & IKON PENSIL BERSEBELAHAN */}
                     <td className="py-3.5 px-4 align-top space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
                           {task.detail_task}
-                        </div>
+                        </span>
                         <button
                           onClick={() => openEditModal(task)}
                           title="Edit Task"
-                          className="p-1 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded transition shrink-0 cursor-pointer"
+                          className="inline-flex items-center justify-center p-1 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 rounded transition shrink-0 cursor-pointer shadow-2xs"
                         >
-                          ✏️
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
                         </button>
                       </div>
 
@@ -658,7 +660,7 @@ export default function TeamLeaderConsole() {
                       </span>
                     </td>
 
-                    {/* AKSI (Hanya dropdown status saja, tombol edit dipindah ke icon pensil di deskripsi) */}
+                    {/* AKSI */}
                     <td className="py-3.5 px-4 align-middle text-right">
                       <select
                         value={currentStatus}
