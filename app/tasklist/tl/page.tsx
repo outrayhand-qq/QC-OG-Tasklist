@@ -141,11 +141,20 @@ export default function TeamLeaderConsole() {
     if (!cleanEntry) return
 
     const now = new Date()
-    const day = String(now.getDate()).padStart(2, '0')
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const hours = String(now.getHours()).padStart(2, '0')
-    const mins = String(now.getMinutes()).padStart(2, '0')
-    const timeStamp = `[${day}/${month} ${hours}:${mins}]`
+    const formatter = new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+    const parts = formatter.formatToParts(now)
+    const day = parts.find(p => p.type === 'day')?.value
+    const month = parts.find(p => p.type === 'month')?.value
+    const hour = parts.find(p => p.type === 'hour')?.value
+    const minute = parts.find(p => p.type === 'minute')?.value
+    const timeStamp = `[${day}/${month} ${hour}:${minute}]`
 
     const targetTask = tasks.find((t) => t.id === taskId)
     const currentFeedback = targetTask?.feedback ? targetTask.feedback.trim() : ''
@@ -250,13 +259,16 @@ export default function TeamLeaderConsole() {
   }
 
   const updateStatus = async (id: string, newStatus: string) => {
-    const currentDateStr = new Date().toISOString().split('T')[0]
+    // Waktu WIB saat task di-close
+    const nowWIB = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T') + '+07:00'
+    const currentDateStr = newStatus === 'Closed' ? nowWIB : null
+
     const { error } = await supabase
       .from('db_tasklist')
       .update({ 
         status: newStatus, 
         final_status: newStatus === 'Closed' ? 'Closed' : null,
-        waktu_close: newStatus === 'Closed' ? currentDateStr : null,
+        waktu_close: currentDateStr,
         last_updated: new Date().toISOString() 
       })
       .eq('id', id)
@@ -341,6 +353,30 @@ export default function TeamLeaderConsole() {
       return `${day}/${month}/${year ? year.slice(2) : ''} ${timePart}`
     }
     return dateStr
+  }
+
+  // Fungsi Kalkulator Durasi Penyelesaian (created_at s.d. waktu_close)
+  const calculateDuration = (createdAt: string, closedAt?: string) => {
+    if (!createdAt || !closedAt) return null
+    const start = new Date(createdAt).getTime()
+    const end = new Date(closedAt).getTime()
+    const diffMs = end - start
+
+    if (isNaN(diffMs) || diffMs < 0) return null
+
+    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffMinutes < 60) {
+      return `${diffMinutes} Menit`
+    } else if (diffHours < 24) {
+      const mins = diffMinutes % 60
+      return mins > 0 ? `${diffHours} Jam ${mins} Menit` : `${diffHours} Jam`
+    } else {
+      const hours = diffHours % 24
+      return hours > 0 ? `${diffDays} Hari ${hours} Jam` : `${diffDays} Hari`
+    }
   }
 
   const isSuperAdmin = userRole === 'superadmin'
@@ -479,7 +515,6 @@ export default function TeamLeaderConsole() {
             <span className="absolute left-2.5 top-1.5 text-zinc-400 text-xs">🔍</span>
           </div>
 
-          {/* Filter User: HANYA MUNCUL UNTUK SUPERADMIN */}
           {isSuperAdmin && (
             <select
               value={selectedPicFilter}
@@ -544,10 +579,13 @@ export default function TeamLeaderConsole() {
               {filteredTasks.map((task) => {
                 const isQC = task.pic_assignment?.toLowerCase().includes('qc')
                 const currentStatus = task.final_status || task.status || 'Open'
+                const isClosed = currentStatus === 'Closed'
+                const durationResult = isClosed ? calculateDuration(task.created_at, task.waktu_close) : null
+
                 return (
                   <tr key={task.id} className="hover:bg-zinc-50/60 transition group">
                     
-                    {/* DESKRIPSI TUGAS & IKON PENSIL BERSEBELAHAN */}
+                    {/* DESKRIPSI TUGAS & DEADLINE + WAKTU CLOSE & DURASI */}
                     <td className="py-3.5 px-4 align-top space-y-2">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
@@ -564,12 +602,27 @@ export default function TeamLeaderConsole() {
                         </button>
                       </div>
 
-                      {task.deadline && (
-                        <div className="text-[11px] text-zinc-500 flex items-center gap-1 font-mono">
-                          <span>🕒</span>
-                          <span>Deadline: {formatDeadlineDisplay(task.deadline)}</span>
-                        </div>
-                      )}
+                      {/* Informasi Deadline, Waktu Close & Durasi */}
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-zinc-500 font-mono">
+                        {task.deadline && (
+                          <div className="flex items-center gap-1">
+                            <span>🕒</span>
+                            <span>Deadline: {formatDeadlineDisplay(task.deadline)}</span>
+                          </div>
+                        )}
+
+                        {isClosed && task.waktu_close && (
+                          <div className="flex items-center gap-1 text-emerald-700 font-medium">
+                            <span>✅</span>
+                            <span>Closed: {formatDeadlineDisplay(task.waktu_close)}</span>
+                            {durationResult && (
+                              <span className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-bold ml-1">
+                                Selesai dalam {durationResult}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Log Riwayat Feedback / Tindak Lanjut */}
                       <div className="mt-2 space-y-1.5">
