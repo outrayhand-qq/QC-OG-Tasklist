@@ -39,13 +39,16 @@ export default function LoginPage() {
         return
       }
 
-      // 2. Catat log login ke database (opsional jika tabel log ada)
+ const nowWIB = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T') + '+07:00'
+
+      // 3. Catat log login ke database Supabase dengan waktu WIB
       await supabase
         .from('db_login_logs')
         .insert([
           {
             email: cleanEmail,
             status: 'Success',
+            created_at: nowWIB,
           },
         ])
         .select()
