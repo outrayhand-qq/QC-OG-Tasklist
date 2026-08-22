@@ -1,69 +1,119 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+  const router = useRouter()
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setErrorMsg('')
+
+    if (!email || !password) {
+      setErrorMsg('Email dan password wajib diisi!')
+      setLoading(false)
+      return
+    }
+
+    try {
+      // 1. Catat log login ke database Supabase
+      const { error: logError } = await supabase
+        .from('db_login_logs')
+        .insert([
+          {
+            email: email.trim(),
+            status: 'Success',
+          },
+        ])
+
+      if (logError) {
+        console.error('Gagal mencatat log login:', logError.message)
+      }
+
+      // 2. Simpan status login di browser & arahkan ke halaman konsol TL
+      localStorage.setItem('isLoggedIn', 'true')
+      localStorage.setItem('userEmail', email.trim())
+      router.push('/tasklist/tl')
+
+    } catch (err: any) {
+      setErrorMsg('Terjadi kesalahan sistem: ' + err.message)
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <main className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-sm space-y-8">
+        
+        {/* Header Title */}
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-black tracking-tight text-zinc-900 leading-tight">
+            QC&OG<br />Monitoring.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-xs text-zinc-500 font-medium">
+            Access your dashboard performance.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+
+        {/* Error Message jika ada */}
+        {errorMsg && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg text-center font-medium">
+            {errorMsg}
+          </div>
+        )}
+
+        {/* Form Login */}
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-3">
+            <input
+              type="email"
+              placeholder="Email (cth: anda@gmail.com)"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full h-11 px-3.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-black transition"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full h-11 px-3.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-black transition"
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-xs">
+            <label className="flex items-center gap-2 text-zinc-600 select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-300 accent-black cursor-pointer"
+              />
+              <span>Ingat saya di perangkat ini</span>
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full h-11 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-lg transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
           >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+            <span>{loading ? 'Signing In...' : 'Sign In'}</span>
+            {!loading && <span>→</span>}
+          </button>
+        </form>
+
+      </div>
+    </main>
+  )
 }
