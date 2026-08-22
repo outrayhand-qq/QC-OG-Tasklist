@@ -24,24 +24,42 @@ export default function LoginPage() {
     }
 
     try {
-      // 1. Catat log login ke database Supabase
-      const { error: logError } = await supabase
+      const cleanEmail = email.trim().toLowerCase()
+
+      // 1. Cek apakah email terdaftar dan apa rolenya di tabel db_users
+      const { data: userData, error: userError } = await supabase
+        .from('db_users')
+        .select('role, email')
+        .eq('email', cleanEmail)
+        .single()
+
+      if (userError || !userData) {
+        setErrorMsg('Email tidak terdaftar sebagai hak akses sistem!')
+        setLoading(false)
+        return
+      }
+
+      // 2. Catat log login ke database (tabel db_login_logs yang tadi dibuat)
+      await supabase
         .from('db_login_logs')
         .insert([
           {
-            email: email.trim(),
+            email: cleanEmail,
             status: 'Success',
           },
         ])
 
-      if (logError) {
-        console.error('Gagal mencatat log login:', logError.message)
-      }
-
-      // 2. Simpan status login di browser & arahkan ke halaman konsol TL
+      // 3. Simpan sesi & role di browser
       localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem('userEmail', email.trim())
-      router.push('/tasklist/tl')
+      localStorage.setItem('userEmail', userData.email)
+      localStorage.setItem('userRole', userData.role)
+
+      // 4. Redirect sesuai role
+      if (userData.role === 'superadmin') {
+        router.push('/tasklist/superadmin') // Arahkan ke halaman superadmin
+      } else {
+        router.push('/tasklist/tl') // Arahkan TL hanya ke halaman task list
+      }
 
     } catch (err: any) {
       setErrorMsg('Terjadi kesalahan sistem: ' + err.message)
@@ -55,11 +73,11 @@ export default function LoginPage() {
         
         {/* Header Title */}
         <div className="text-center space-y-2">
-          <h1 className="text-6xl font-black tracking-tight text-zinc-900 leading-tight">
+          <h1 className="text-5xl font-black tracking-tight text-zinc-900 leading-tight">
             QC&OG<br />Monitoring.
           </h1>
           <p className="text-xs text-zinc-500 font-medium">
-            Access your dashboard performance.
+            Monitoring Dashboard performance.
           </p>
         </div>
 

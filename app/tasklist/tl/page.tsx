@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { exportTasksToCSV } from '@/lib/export-csv'
+import { useRouter } from 'next/navigation'
 
 type Task = {
   id: string
@@ -41,6 +42,15 @@ const ALL_PICS = [
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent']
 
 export default function TeamLeaderConsole() {
+  const router = useRouter()
+
+  useEffect(() => {
+    const isLogged = localStorage.getItem('isLoggedIn')
+    if (!isLogged) {
+      router.push('/')
+    }
+  }, [router])
+
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState<boolean>(true)
 
