@@ -259,8 +259,17 @@ export default function TeamLeaderConsole() {
   }
 
   const updateStatus = async (id: string, newStatus: string) => {
-    // Waktu WIB saat task di-close
-    const nowWIB = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T') + '+07:00'
+    const options = { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false } as const
+    const formatter = new Intl.DateTimeFormat('en-CA', options)
+    const parts = formatter.formatToParts(new Date())
+    const year = parts.find(p => p.type === 'year')?.value
+    const month = parts.find(p => p.type === 'month')?.value
+    const day = parts.find(p => p.type === 'day')?.value
+    const hour = parts.find(p => p.type === 'hour')?.value
+    const minute = parts.find(p => p.type === 'minute')?.value
+    const second = parts.find(p => p.type === 'second')?.value
+    const nowWIB = `${year}-${month}-${day} ${hour}:${minute}:${second}+07`
+
     const currentDateStr = newStatus === 'Closed' ? nowWIB : null
 
     const { error } = await supabase
@@ -345,17 +354,17 @@ export default function TeamLeaderConsole() {
 
   const formatDeadlineDisplay = (dateStr: string) => {
     if (!dateStr) return null
-    if (dateStr.includes('T')) {
-      const parts = dateStr.split('T')
+    if (dateStr.includes('T') || dateStr.includes(' ')) {
+      const parts = dateStr.split(/T| /)
       const datePart = parts[0] || ''
-      const timePart = parts[1] || ''
+      const timePart = parts[1] ? parts[1].substring(0, 5) : ''
       const [year, month, day] = datePart.split('-')
-      return `${day}/${month}/${year ? year.slice(2) : ''} ${timePart}`
+      return `${day}/${month}/${year ? year.slice(2) : ''}${timePart ? ' ' + timePart : ''}`
     }
     return dateStr
   }
 
-  // Fungsi Kalkulator Durasi Penyelesaian (created_at s.d. waktu_close)
+  // Kalkulator Durasi Penyelesaian Task
   const calculateDuration = (createdAt: string, closedAt?: string) => {
     if (!createdAt || !closedAt) return null
     const start = new Date(createdAt).getTime()
@@ -377,6 +386,33 @@ export default function TeamLeaderConsole() {
       const hours = diffHours % 24
       return hours > 0 ? `${diffDays} Hari ${hours} Jam` : `${diffDays} Hari`
     }
+  }
+
+  // Pengecekan Status Overdue atau H-3 Deadline dengan teks bold
+  const getDeadlineStatusInfo = (deadlineStr: string, status?: string, finalStatus?: string) => {
+    const currentStat = finalStatus || status
+    if (currentStat === 'Closed' || !deadlineStr) return null
+
+    const now = new Date().getTime()
+    const deadlineTime = new Date(deadlineStr).getTime()
+    if (isNaN(deadlineTime)) return null
+
+    const diffMs = deadlineTime - now
+    const diffDays = diffMs / (1000 * 60 * 60 * 24)
+
+    if (diffMs < 0) {
+      const overdueDays = Math.abs(Math.floor(diffDays))
+      const overdueHours = Math.abs(Math.floor(diffMs / (1000 * 60 * 60)))
+      const label = overdueHours < 24 ? `${overdueHours} Jam lalu` : `${overdueDays} Hari lalu`
+      return { type: 'overdue', text: `⚠️ Overdue (${label}!)` }
+    } else if (diffDays <= 3) {
+      const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60))
+      const daysLeft = Math.floor(diffDays)
+      const label = hoursLeft < 24 ? `${hoursLeft} Jam lagi` : `${daysLeft} Hari lagi`
+      return { type: 'h3', text: `Deadline ${label}!` }
+    }
+
+    return null
   }
 
   const isSuperAdmin = userRole === 'superadmin'
@@ -581,11 +617,12 @@ export default function TeamLeaderConsole() {
                 const currentStatus = task.final_status || task.status || 'Open'
                 const isClosed = currentStatus === 'Closed'
                 const durationResult = isClosed ? calculateDuration(task.created_at, task.waktu_close) : null
+                const deadlineAlert = getDeadlineStatusInfo(task.deadline, task.status, task.final_status)
 
                 return (
                   <tr key={task.id} className="hover:bg-zinc-50/60 transition group">
                     
-                    {/* DESKRIPSI TUGAS & DEADLINE + WAKTU CLOSE & DURASI */}
+                    {/* DESKRIPSI TUGAS & KETERANGAN DEADLINE */}
                     <td className="py-3.5 px-4 align-top space-y-2">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
@@ -602,21 +639,29 @@ export default function TeamLeaderConsole() {
                         </button>
                       </div>
 
-                      {/* Informasi Deadline, Waktu Close & Durasi */}
-                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-zinc-500 font-mono">
+                      {/* Bar Informasi Deadline & Keterangan Tambahan (Teks Bold) */}
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
                         {task.deadline && (
-                          <div className="flex items-center gap-1">
+                          <div className="text-zinc-500 flex items-center gap-1 font-semibold">
                             <span>🕒</span>
                             <span>Deadline: {formatDeadlineDisplay(task.deadline)}</span>
                           </div>
                         )}
 
+                        {/* Indikator Peringatan Deadline / Overdue (Bold & Menonjol) */}
+                        {deadlineAlert && !isClosed && (
+                          <span className={`px-2 py-0.5 rounded font-black tracking-wide ${deadlineAlert.type === 'overdue' ? 'bg-rose-100 border border-rose-300 text-rose-800 animate-pulse' : 'bg-amber-100 border border-amber-300 text-amber-900'}`}>
+                            {deadlineAlert.text}
+                          </span>
+                        )}
+
+                        {/* Indikator Closed & Durasi */}
                         {isClosed && task.waktu_close && (
-                          <div className="flex items-center gap-1 text-emerald-700 font-medium">
+                          <div className="flex items-center gap-1 text-emerald-800 font-bold">
                             <span>✅</span>
                             <span>Closed: {formatDeadlineDisplay(task.waktu_close)}</span>
                             {durationResult && (
-                              <span className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-bold ml-1">
+                              <span className="bg-emerald-100 border border-emerald-300 text-emerald-900 px-2 py-0.5 rounded font-black ml-1">
                                 Selesai dalam {durationResult}
                               </span>
                             )}
