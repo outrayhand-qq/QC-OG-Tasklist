@@ -94,20 +94,17 @@ export default function TeamLeaderConsole() {
     }
   }, [])
 
-  // FUNGSI FETCH TASKS DENGAN FILTER PERMISSION KETAT
   const fetchTasks = async () => {
     setLoading(true)
     const role = (typeof window !== 'undefined' ? localStorage.getItem('userRole') || '' : '').toLowerCase().trim()
 
     let query = supabase.from('db_tasklist').select('*')
 
-    // Filter ketat berdasarkan role agar tidak bocor
     if (role === 'tlqc') {
       query = query.ilike('pic_assignment', '%qc%')
     } else if (role === 'tlog') {
       query = query.or('pic_assignment.ilike.%outgoing%,pic_assignment.ilike.%og%')
     }
-    // Jika superadmin, dibiarkan mengambil semua data
 
     const { data, error } = await query.order('created_at', { ascending: false })
 
@@ -115,7 +112,6 @@ export default function TeamLeaderConsole() {
       console.error('Error fetching tasks:', error.message)
     }
     if (!error && data) {
-      // Filter lapis kedua di sisi frontend untuk memastikan keamanan mutlak
       let filtered = data
       if (role === 'tlqc') {
         filtered = data.filter((t) => t.pic_assignment?.toLowerCase().includes('qc'))
@@ -349,7 +345,6 @@ export default function TeamLeaderConsole() {
 
   const isSuperAdmin = userRole === 'superadmin'
 
-  // Label role yang rapi untuk ditampilkan di footer
   const displayRoleLabel = isSuperAdmin
     ? 'SUPERADMIN'
     : userRole === 'tlqc'
@@ -484,16 +479,19 @@ export default function TeamLeaderConsole() {
             <span className="absolute left-2.5 top-1.5 text-zinc-400 text-xs">🔍</span>
           </div>
 
-          <select
-            value={selectedPicFilter}
-            onChange={(e) => setSelectedPicFilter(e.target.value)}
-            className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
-          >
-            <option value="All">Semua User</option>
-            {ALL_PICS.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+          {/* Filter User: HANYA MUNCUL UNTUK SUPERADMIN */}
+          {isSuperAdmin && (
+            <select
+              value={selectedPicFilter}
+              onChange={(e) => setSelectedPicFilter(e.target.value)}
+              className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
+            >
+              <option value="All">Semua User</option>
+              {ALL_PICS.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          )}
 
           <select
             value={selectedPriority}
@@ -549,10 +547,19 @@ export default function TeamLeaderConsole() {
                 return (
                   <tr key={task.id} className="hover:bg-zinc-50/60 transition group">
                     
-                    {/* DESKRIPSI TUGAS */}
+                    {/* DESKRIPSI TUGAS & IKON EDIT (PENSIL) */}
                     <td className="py-3.5 px-4 align-top space-y-2">
-                      <div className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
-                        {task.detail_task}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
+                          {task.detail_task}
+                        </div>
+                        <button
+                          onClick={() => openEditModal(task)}
+                          title="Edit Task"
+                          className="p-1 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded transition shrink-0 cursor-pointer"
+                        >
+                          ✏️
+                        </button>
                       </div>
 
                       {task.deadline && (
@@ -651,8 +658,8 @@ export default function TeamLeaderConsole() {
                       </span>
                     </td>
 
-                    {/* AKSI */}
-                    <td className="py-3.5 px-4 align-middle text-right space-y-1">
+                    {/* AKSI (Hanya dropdown status saja, tombol edit dipindah ke icon pensil di deskripsi) */}
+                    <td className="py-3.5 px-4 align-middle text-right">
                       <select
                         value={currentStatus}
                         onChange={(e) => updateStatus(task.id, e.target.value)}
@@ -662,14 +669,6 @@ export default function TeamLeaderConsole() {
                         <option value="On Progress">On Progress</option>
                         <option value="Closed">Closed</option>
                       </select>
-                      <div>
-                        <button
-                          onClick={() => openEditModal(task)}
-                          className="text-[11px] font-bold text-zinc-500 hover:text-black underline cursor-pointer"
-                        >
-                          Edit Task
-                        </button>
-                      </div>
                     </td>
 
                   </tr>
@@ -680,7 +679,7 @@ export default function TeamLeaderConsole() {
         )}
       </div>
 
-      {/* Footer / Panel Pojok Bawah (Email + Badge Role Sesuai & Icon Logout) */}
+      {/* Footer / Panel Pojok Bawah */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xs border-t border-zinc-200/80 px-4 py-2 flex items-center justify-between text-xs shadow-md z-40">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
