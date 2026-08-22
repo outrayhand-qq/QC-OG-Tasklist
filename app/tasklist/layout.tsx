@@ -116,8 +116,12 @@ export default function TaskListLayout({
                     <span>Log Komplain Harian</span>
                   </Link>
                   <Link
-                    href="/tracker-klaim"
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition"
+                    href="/tasklist/staff-klaim"
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition ${
+                      pathname === '/tasklist/staff-klaim'
+                        ? 'bg-black text-white font-bold'
+                        : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                    }`}
                   >
                     <span>🛡️</span>
                     <span>Tracker Klaim</span>
@@ -136,7 +140,7 @@ export default function TaskListLayout({
       </aside>
 
       {/* Konten Utama Halaman */}
-      <div className="flex-1 overflow-x-auto">
+      <div className="flex-1 overflow-x-auto p-6 md:p-8">
         {children}
       </div>
     </div>

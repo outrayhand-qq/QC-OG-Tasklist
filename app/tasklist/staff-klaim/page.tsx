@@ -42,15 +42,15 @@ export default function StaffKlaimDashboard() {
 
   const stats = useMemo(() => {
     const totalKasus = data.length
-    const totalPengajuan = data.filter((item) => item.tgl_pengajuan_ez).length
+    const totalPengajuan = data.filter((item) => item.tgl_pengajuan_ez || item['tgl_pengajuan_ez']).length
     
     let totalRupiahApproved = 0
     let totalRejectCancel = 0
 
     data.forEach((item) => {
-      const fStatus = String(item.final_status || '').toLowerCase()
+      const fStatus = String(item.final_status || item['final status'] || '').toLowerCase()
       if (fStatus.includes('approved')) {
-        const rawNominal = item.nominal_claim ?? 0
+        const rawNominal = item.nominal_claim ?? item['nominal claim'] ?? 0
         totalRupiahApproved += Number(rawNominal) || 0
       }
       if (fStatus.includes('cancel') || fStatus.includes('reject')) {
@@ -63,14 +63,17 @@ export default function StaffKlaimDashboard() {
 
   const filteredData = useMemo(() => {
     return data.filter((item) => {
-      const awb = String(item.no_awb || '').toLowerCase()
-      const client = String(item.client_name || '').toLowerCase()
+      const awb = String(item.no_awb || item['no awb'] || '').toLowerCase()
+      const client = String(item.client_name || item['client name'] || '').toLowerCase()
       const ket = String(item.keterangan || '').toLowerCase()
       const query = searchQuery.toLowerCase()
 
       const matchesSearch = awb.includes(query) || client.includes(query) || ket.includes(query)
-      const matchesEkspedisi = selectedEkspedisi === 'All' || item.jenis_ekspedisi === selectedEkspedisi
-      const matchesCase = selectedCase === 'All' || item.kategori_case === selectedCase
+      const ekspedisiVal = item.jenis_ekspedisi || item['jenis ekspedisi'] || ''
+      const caseVal = item.kategori_case || item['kategori case'] || ''
+
+      const matchesEkspedisi = selectedEkspedisi === 'All' || ekspedisiVal === selectedEkspedisi
+      const matchesCase = selectedCase === 'All' || caseVal === selectedCase
 
       return matchesSearch && matchesEkspedisi && matchesCase
     })
@@ -93,11 +96,13 @@ export default function StaffKlaimDashboard() {
   }
 
   return (
-    <main className="p-8 max-w-[1700px] w-full mx-auto space-y-6 pb-24 bg-zinc-50/50 min-h-screen">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
+    <div className="space-y-6">
+      
+      {/* Header Halaman */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-zinc-200">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight text-zinc-900">
-            Dashboard Monitoring Staff Klaim
+            Tracker & Monitoring Klaim
           </h1>
           <p className="text-xs text-zinc-500 mt-0.5">
             Real-time synchronization data dari Google Sheets operasional klaim.
@@ -112,6 +117,7 @@ export default function StaffKlaimDashboard() {
         </button>
       </div>
 
+      {/* Metric Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-2xs space-y-1">
           <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
@@ -131,6 +137,7 @@ export default function StaffKlaimDashboard() {
         </div>
       </div>
 
+      {/* Toolbar & Filter */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 rounded-lg border border-zinc-200/90 shadow-2xs">
         <div className="relative flex-1 max-w-sm">
           <input
@@ -176,6 +183,7 @@ export default function StaffKlaimDashboard() {
         </div>
       </div>
 
+      {/* Tabel Data Klaim */}
       <div className="bg-white border border-zinc-200/90 rounded-lg shadow-2xs overflow-hidden">
         {loading ? (
           <div className="py-24 text-center text-xs text-zinc-400 font-bold uppercase tracking-widest animate-pulse">
@@ -202,49 +210,62 @@ export default function StaffKlaimDashboard() {
               </thead>
               <tbody className="divide-y divide-zinc-100 text-xs text-zinc-800">
                 {filteredData.map((item, idx) => {
-                  const finalStat = String(item.final_status || '').toLowerCase()
+                  const finalStat = String(item.final_status || item['final status'] || '').toLowerCase()
                   const isApproved = finalStat.includes('approved')
                   const isRejectCancel = finalStat.includes('cancel') || finalStat.includes('reject')
+
+                  const awbText = item.no_awb || item['no awb'] || '-'
+                  const clientText = item.client_name || item['client name'] || '-'
+                  const ekspedisiText = item.jenis_ekspedisi || item['jenis ekspedisi'] || '-'
+                  const caseText = item.kategori_case || item['kategori case'] || '-'
+                  const updateStatText = item.update_status || item['update status'] || 'Open'
+                  const finalStatText = item.final_status || item['final status'] || 'Belum Putus'
+                  const dateAddedVal = item.date_added || item['date added']
+                  const tglPengajuanVal = item.tgl_pengajuan_ez || item['tgl pengajuan ez']
+                  const tglMutasiVal = item.tgl_mutasi || item['tgl mutasi']
+                  const nominalVal = item.nominal_claim || item['nominal claim'] || 0
+                  const ketText = item.keterangan || '-'
+                  const userText = item.user || '-'
 
                   return (
                     <tr key={idx} className="hover:bg-zinc-50/70 transition">
                       <td className="py-3 px-4 align-middle">
-                        <div className="font-mono font-bold text-zinc-900">{item.no_awb || '-'}</div>
-                        <div className="text-[11px] text-zinc-500 font-medium">{item.client_name || '-'}</div>
+                        <div className="font-mono font-bold text-zinc-900">{awbText}</div>
+                        <div className="text-[11px] text-zinc-500 font-medium">{clientText}</div>
                       </td>
                       <td className="py-3 px-4 align-middle space-y-1">
                         <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200">
-                          {item.jenis_ekspedisi || '-'}
+                          {ekspedisiText}
                         </span>
                         <div>
                           <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-800 border border-rose-200/80">
-                            {item.kategori_case || '-'}
+                            {caseText}
                           </span>
                         </div>
                       </td>
                       <td className="py-3 px-4 align-middle">
                         <span className="inline-block px-2.5 py-1 rounded text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200">
-                          {item.update_status || 'Open'}
+                          {updateStatText}
                         </span>
                       </td>
                       <td className="py-3 px-4 align-middle">
                         <span className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold ${isApproved ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : isRejectCancel ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-zinc-100 text-zinc-600 border border-zinc-200'}`}>
-                          {item.final_status || 'Belum Putus'}
+                          {finalStatText}
                         </span>
                       </td>
                       <td className="py-3 px-4 align-middle text-[11px] font-mono text-zinc-600 space-y-0.5">
-                        <div>📥 Masuk: {formatDateDisplay(item.date_added)}</div>
-                        {item.tgl_pengajuan_ez && <div>📤 Ajuan: {formatDateDisplay(item.tgl_pengajuan_ez)}</div>}
-                        {item.tgl_mutasi && <div className="text-emerald-700 font-bold">💰 Mutasi: {formatDateDisplay(item.tgl_mutasi)}</div>}
+                        <div>📥 Masuk: {formatDateDisplay(dateAddedVal)}</div>
+                        {tglPengajuanVal && <div>📤 Ajuan: {formatDateDisplay(tglPengajuanVal)}</div>}
+                        {tglMutasiVal && <div className="text-emerald-700 font-bold">💰 Mutasi: {formatDateDisplay(tglMutasiVal)}</div>}
                       </td>
                       <td className="py-3 px-4 align-middle text-right font-mono font-bold text-zinc-900">
-                        {formatRupiah(item.nominal_claim)}
+                        {formatRupiah(nominalVal)}
                       </td>
-                      <td className="py-3 px-4 align-middle max-w-xs truncate text-zinc-600" title={item.keterangan}>
-                        {item.keterangan || '-'}
+                      <td className="py-3 px-4 align-middle max-w-xs truncate text-zinc-600" title={ketText}>
+                        {ketText}
                       </td>
                       <td className="py-3 px-4 align-middle font-semibold text-zinc-700">
-                        {item.user || '-'}
+                        {userText}
                       </td>
                     </tr>
                   )
@@ -254,6 +275,7 @@ export default function StaffKlaimDashboard() {
           </div>
         )}
       </div>
-    </main>
+
+    </div>
   )
 }
