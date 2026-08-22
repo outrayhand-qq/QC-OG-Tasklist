@@ -22,10 +22,6 @@ export default function StaffKlaimDashboard() {
     setLoading(true)
     try {
       const url = 'https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec'
-      if (url.includes('MASUKKAN_URL')) {
-        setLoading(false)
-        return
-      }
       const res = await fetch(url)
       const result = await res.json()
       setData(result)
@@ -40,18 +36,33 @@ export default function StaffKlaimDashboard() {
     fetchDataFromSheet()
   }, [])
 
+  // Helper cerdas untuk mencari properti dari data GSheet
+  const getVal = (item: any, possibleKeys: string[]) => {
+    for (const key of possibleKeys) {
+      const found = Object.keys(item).find(
+        (k) => k.toLowerCase().replace(/[\s_]/g, '') === key.toLowerCase().replace(/[\s_]/g, '')
+      )
+      if (found !== undefined && item[found] !== null && item[found] !== '') {
+        return item[found]
+      }
+    }
+    return ''
+  }
+
   const stats = useMemo(() => {
     const totalKasus = data.length
-    const totalPengajuan = data.filter((item) => item.tgl_pengajuan_ez || item['tgl_pengajuan_ez']).length
-    
+    let totalPengajuan = 0
     let totalRupiahApproved = 0
     let totalRejectCancel = 0
 
     data.forEach((item) => {
-      const fStatus = String(item.final_status || item['final status'] || '').toLowerCase()
+      const tglAjuan = getVal(item, ['tgl_pengajuan_ez', 'tglpengajuanez'])
+      if (tglAjuan) totalPengajuan += 1
+
+      const fStatus = String(getVal(item, ['final_status', 'finalstatus'])).toLowerCase()
       if (fStatus.includes('approved')) {
-        const rawNominal = item.nominal_claim ?? item['nominal claim'] ?? 0
-        totalRupiahApproved += Number(rawNominal) || 0
+        const nominal = Number(getVal(item, ['nominal_claim', 'nominalclaim'])) || 0
+        totalRupiahApproved += nominal
       }
       if (fStatus.includes('cancel') || fStatus.includes('reject')) {
         totalRejectCancel += 1
@@ -63,14 +74,14 @@ export default function StaffKlaimDashboard() {
 
   const filteredData = useMemo(() => {
     return data.filter((item) => {
-      const awb = String(item.no_awb || item['no awb'] || '').toLowerCase()
-      const client = String(item.client_name || item['client name'] || '').toLowerCase()
-      const ket = String(item.keterangan || '').toLowerCase()
+      const awb = String(getVal(item, ['no_awb', 'noawb'])).toLowerCase()
+      const client = String(getVal(item, ['client_name', 'clientname'])).toLowerCase()
+      const ket = String(getVal(item, ['keterangan'])).toLowerCase()
       const query = searchQuery.toLowerCase()
 
       const matchesSearch = awb.includes(query) || client.includes(query) || ket.includes(query)
-      const ekspedisiVal = item.jenis_ekspedisi || item['jenis ekspedisi'] || ''
-      const caseVal = item.kategori_case || item['kategori case'] || ''
+      const ekspedisiVal = String(getVal(item, ['jenis_ekspedisi', 'jenisekspedisi']))
+      const caseVal = String(getVal(item, ['kategori_case', 'kategoricase']))
 
       const matchesEkspedisi = selectedEkspedisi === 'All' || ekspedisiVal === selectedEkspedisi
       const matchesCase = selectedCase === 'All' || caseVal === selectedCase
@@ -80,7 +91,7 @@ export default function StaffKlaimDashboard() {
   }, [data, searchQuery, selectedEkspedisi, selectedCase])
 
   const formatRupiah = (val: any) => {
-    const num = Number(val ?? 0) || 0
+    const num = Number(val) || 0
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num)
   }
 
@@ -210,22 +221,21 @@ export default function StaffKlaimDashboard() {
               </thead>
               <tbody className="divide-y divide-zinc-100 text-xs text-zinc-800">
                 {filteredData.map((item, idx) => {
-                  const finalStat = String(item.final_status || item['final status'] || '').toLowerCase()
-                  const isApproved = finalStat.includes('approved')
-                  const isRejectCancel = finalStat.includes('cancel') || finalStat.includes('reject')
+                  const finalStatText = String(getVal(item, ['final_status', 'finalstatus']) || 'Belum Putus')
+                  const isApproved = finalStatText.toLowerCase().includes('approved')
+                  const isRejectCancel = finalStatText.toLowerCase().includes('cancel') || finalStatText.toLowerCase().includes('reject')
 
-                  const awbText = item.no_awb || item['no awb'] || '-'
-                  const clientText = item.client_name || item['client name'] || '-'
-                  const ekspedisiText = item.jenis_ekspedisi || item['jenis ekspedisi'] || '-'
-                  const caseText = item.kategori_case || item['kategori case'] || '-'
-                  const updateStatText = item.update_status || item['update status'] || 'Open'
-                  const finalStatText = item.final_status || item['final status'] || 'Belum Putus'
-                  const dateAddedVal = item.date_added || item['date added']
-                  const tglPengajuanVal = item.tgl_pengajuan_ez || item['tgl pengajuan ez']
-                  const tglMutasiVal = item.tgl_mutasi || item['tgl mutasi']
-                  const nominalVal = item.nominal_claim || item['nominal claim'] || 0
-                  const ketText = item.keterangan || '-'
-                  const userText = item.user || '-'
+                  const awbText = getVal(item, ['no_awb', 'noawb']) || '-'
+                  const clientText = getVal(item, ['client_name', 'clientname']) || '-'
+                  const ekspedisiText = getVal(item, ['jenis_ekspedisi', 'jenisekspedisi']) || '-'
+                  const caseText = getVal(item, ['kategori_case', 'kategoricase']) || '-'
+                  const updateStatText = getVal(item, ['update_status', 'updatestatus']) || 'Open'
+                  const dateAddedVal = getVal(item, ['date_added', 'dateadded'])
+                  const tglPengajuanVal = getVal(item, ['tgl_pengajuan_ez', 'tglpengajuanez'])
+                  const tglMutasiVal = getVal(item, ['tgl_mutasi', 'tglmutasi'])
+                  const nominalVal = getVal(item, ['nominal_claim', 'nominalclaim']) || 0
+                  const ketText = getVal(item, ['keterangan']) || '-'
+                  const userText = getVal(item, ['user']) || '-'
 
                   return (
                     <tr key={idx} className="hover:bg-zinc-50/70 transition">
