@@ -39,7 +39,7 @@ export default function LoginPage() {
         return
       }
 
-      // 2. Catat log login ke database (tabel db_login_logs yang tadi dibuat)
+      // 2. Catat log login ke database (opsional jika tabel log ada)
       await supabase
         .from('db_login_logs')
         .insert([
@@ -48,21 +48,16 @@ export default function LoginPage() {
             status: 'Success',
           },
         ])
+        .select()
+        .then(() => {}) // Abaikan jika tabel log belum ada
 
- // Simpan sesi & role di browser
+      // 3. Simpan sesi & role di browser
       localStorage.setItem('isLoggedIn', 'true')
       localStorage.setItem('userEmail', userData.email)
       localStorage.setItem('userRole', userData.role) // Menyimpan: superadmin, tlqc, atau tlog
 
-      // SEMUA ROLE diarahkan ke halaman utama dashboard tasklist
+      // 4. Redirect semua role ke halaman /tasklist/tl yang sudah tersedia
       router.push('/tasklist/tl')
-
-      // 4. Redirect sesuai role
-      if (userData.role === 'superadmin') {
-        router.push('/tasklist/') // Arahkan ke halaman superadmin
-      } else {
-        router.push('/tasklist/tl') // Arahkan TL hanya ke halaman task list
-      }
 
     } catch (err: any) {
       setErrorMsg('Terjadi kesalahan sistem: ' + err.message)
@@ -76,11 +71,11 @@ export default function LoginPage() {
         
         {/* Header Title */}
         <div className="text-center space-y-2">
-          <h1 className="text-5xl font-black tracking-tight text-zinc-900 leading-tight">
+          <h1 className="text-3xl font-black tracking-tight text-zinc-900 leading-tight">
             QC&OG<br />Monitoring.
           </h1>
           <p className="text-xs text-zinc-500 font-medium">
-            Monitoring Dashboard performance.
+            Access your dashboard performance.
           </p>
         </div>
 
