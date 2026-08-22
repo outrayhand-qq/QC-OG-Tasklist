@@ -9,11 +9,14 @@ type Task = {
   created_at: string
   detail_task: string
   pic_assignment: string
-  status: string
+  status?: string
+  last_updated?: string
+  final_status?: string
+  feedback?: string
   deadline: string
   priority: string
+  waktu_close?: string
   kategori: string
-  feedback?: string
   bukti_url?: string
 }
 
@@ -73,7 +76,12 @@ export default function TeamLeaderConsole() {
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (!error && data) setTasks(data)
+    if (error) {
+      console.error('Error fetching tasks:', error.message)
+    }
+    if (!error && data) {
+      setTasks(data)
+    }
     setLoading(false)
   }
 
@@ -135,6 +143,7 @@ export default function TeamLeaderConsole() {
         feedback: feedback || null,
         bukti_url: buktiUrl || null,
         status: 'Open',
+        final_status: null,
       },
     ])
 
@@ -187,9 +196,15 @@ export default function TeamLeaderConsole() {
   }
 
   const updateStatus = async (id: string, newStatus: string) => {
+    const currentDateStr = new Date().toISOString().split('T')[0]
     const { error } = await supabase
       .from('db_tasklist')
-      .update({ status: newStatus, last_updated: new Date().toISOString() })
+      .update({ 
+        status: newStatus, 
+        final_status: newStatus === 'Closed' ? 'Closed' : null,
+        waktu_close: newStatus === 'Closed' ? currentDateStr : null,
+        last_updated: new Date().toISOString() 
+      })
       .eq('id', id)
     if (!error) fetchTasks()
   }
@@ -230,14 +245,15 @@ export default function TeamLeaderConsole() {
   const stats = useMemo(() => {
     const now = new Date()
     const total = scopedTasks.length
-    const open = scopedTasks.filter((t) => t.status === 'Open').length
-    const progress = scopedTasks.filter((t) => t.status === 'On Progress').length
-    const closed = scopedTasks.filter((t) => t.status === 'Closed').length
+    const open = scopedTasks.filter((t) => (t.status || t.final_status) === 'Open').length
+    const progress = scopedTasks.filter((t) => (t.status || t.final_status) === 'On Progress').length
+    const closed = scopedTasks.filter((t) => (t.status || t.final_status) === 'Closed' || t.final_status === 'Closed').length
     const urgent = scopedTasks.filter(
-      (t) => t.priority === 'Urgent' && t.status !== 'Closed'
+      (t) => t.priority === 'Urgent' && (t.status || t.final_status) !== 'Closed' && t.final_status !== 'Closed'
     ).length
     const overdue = scopedTasks.filter((t) => {
-      if (t.status === 'Closed' || !t.deadline) return false
+      const currentStat = t.final_status || t.status
+      if (currentStat === 'Closed' || !t.deadline) return false
       const deadlineDate = new Date(t.deadline)
       return !isNaN(deadlineDate.getTime()) && deadlineDate < now
     }).length
@@ -247,8 +263,9 @@ export default function TeamLeaderConsole() {
 
   const filteredTasks = useMemo(() => {
     return scopedTasks.filter((t) => {
+      const currentStat = t.final_status || t.status || 'Open'
       const matchesKategori = selectedKategori === 'All' || t.kategori === selectedKategori
-      const matchesStatus = selectedStatus === 'All' || t.status === selectedStatus
+      const matchesStatus = selectedStatus === 'All' || currentStat === selectedStatus
       const matchesPriority = selectedPriority === 'All' || t.priority === selectedPriority
       const matchesSearch =
         t.detail_task?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -281,7 +298,7 @@ export default function TeamLeaderConsole() {
             Team Leader Management Dashboard
           </h1>
           <p className="text-xs text-zinc-500 mt-1">
-            Daily Tracker Log Activity & Tasklist Team Leader QC & Outgoing.
+           Daily Tracker Log Activity & Tasklist Team Leader QC & Outgoing.
           </p>
         </div>
 
@@ -321,7 +338,7 @@ export default function TeamLeaderConsole() {
               className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <span>+</span>
-              <span>Task Baru TL</span>
+              <span>Tambah Task TL</span>
             </button>
             <button
               onClick={fetchTasks}
@@ -451,6 +468,7 @@ export default function TeamLeaderConsole() {
             <tbody className="divide-y divide-zinc-100 text-xs text-zinc-800">
               {filteredTasks.map((task) => {
                 const isQC = task.pic_assignment?.toLowerCase().includes('qc')
+                const currentStatus = task.final_status || task.status || 'Open'
                 return (
                   <tr key={task.id} className="hover:bg-zinc-50/60 transition group">
                     
@@ -524,14 +542,14 @@ export default function TeamLeaderConsole() {
                       )}
                     </td>
 
-                    {/* KATEGORI PILAR (align-middle) */}
+                    {/* KATEGORI PILAR */}
                     <td className="py-3.5 px-4 align-middle">
                       <span className="inline-block px-2.5 py-1 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200/80">
                         {task.kategori || 'Daily Task Operasional'}
                       </span>
                     </td>
 
-                    {/* DIVISI & PIC (align-middle) */}
+                    {/* DIVISI & PIC */}
                     <td className="py-3.5 px-4 align-middle">
                       <div className="flex items-center gap-1.5">
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${isQC ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-zinc-100 text-zinc-700 border border-zinc-200'}`}>
@@ -541,7 +559,7 @@ export default function TeamLeaderConsole() {
                       </div>
                     </td>
 
-                    {/* PRIORITY (align-middle) */}
+                    {/* PRIORITY */}
                     <td className="py-3.5 px-4 align-middle">
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/70">
                         <span className={`w-1.5 h-1.5 rounded-full ${task.priority === 'Urgent' ? 'bg-rose-500' : 'bg-amber-500'}`} />
@@ -549,17 +567,17 @@ export default function TeamLeaderConsole() {
                       </span>
                     </td>
 
-                    {/* STATUS (align-middle) */}
+                    {/* STATUS */}
                     <td className="py-3.5 px-4 align-middle">
-                      <span className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold ${task.status === 'Closed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : task.status === 'On Progress' ? 'bg-sky-50 text-sky-800 border border-sky-200' : 'bg-zinc-100 text-zinc-700 border border-zinc-200'}`}>
-                        {task.status || 'Open'}
+                      <span className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold ${currentStatus === 'Closed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : currentStatus === 'On Progress' ? 'bg-sky-50 text-sky-800 border border-sky-200' : 'bg-zinc-100 text-zinc-700 border border-zinc-200'}`}>
+                        {currentStatus}
                       </span>
                     </td>
 
-                    {/* AKSI (align-middle) */}
+                    {/* AKSI */}
                     <td className="py-3.5 px-4 align-middle text-right space-y-1">
                       <select
-                        value={task.status || 'Open'}
+                        value={currentStatus}
                         onChange={(e) => updateStatus(task.id, e.target.value)}
                         className="text-xs bg-white border border-zinc-200 rounded px-2 py-1 font-medium text-zinc-800 hover:border-zinc-400 focus:outline-none cursor-pointer"
                       >
