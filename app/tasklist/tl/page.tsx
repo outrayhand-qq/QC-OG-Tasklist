@@ -9,7 +9,7 @@ type Task = {
   id: string
   created_at: string
   detail_task: string
-  pic_assignment: string
+  pic_assignment?: string
   status?: string
   last_updated?: string
   final_status?: string
@@ -85,13 +85,13 @@ export default function TeamLeaderConsole() {
 
     let query = supabase.from('db_tasklist').select('*')
 
-    // Filter otomatis berdasarkan role
+    // Filter ketat database berdasarkan role login (Task QC vs Task OG)
     if (userRole === 'tlqc') {
       query = query.ilike('pic_assignment', '%qc%')
     } else if (userRole === 'tlog') {
       query = query.or('pic_assignment.ilike.%outgoing%,pic_assignment.ilike.%og%')
     }
-    // Jika superadmin, query bebas tanpa filter (akses penuh)
+    // Jika superadmin, tampilkan semua task penuh
 
     const { data, error } = await query.order('created_at', { ascending: false })
 
@@ -152,15 +152,25 @@ export default function TeamLeaderConsole() {
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!detailTask || selectedPics.length === 0) {
-      alert('Detail task dan minimal 1 PIC wajib diisi!')
+    if (!detailTask) {
+      alert('Detail task wajib diisi!')
       return
+    }
+
+    const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : ''
+    let assignedPic = selectedPics.join(', ')
+
+    // Jika PIC tidak dipilih saat buat task, otomatis assign ke role masing-masing
+    if (!assignedPic) {
+      if (userRole === 'tlqc') assignedPic = 'TL QC'
+      else if (userRole === 'tlog') assignedPic = 'TL Outgoing'
+      else assignedPic = 'Manager QC&OG'
     }
 
     const { error } = await supabase.from('db_tasklist').insert([
       {
         detail_task: detailTask,
-        pic_assignment: selectedPics.join(', '),
+        pic_assignment: assignedPic,
         kategori: kategori,
         priority: priority,
         deadline: deadline || null,
@@ -313,11 +323,10 @@ export default function TeamLeaderConsole() {
     return dateStr
   }
 
-  // Cek apakah user yang login adalah superadmin
   const isSuperAdmin = typeof window !== 'undefined' && localStorage.getItem('userRole') === 'superadmin'
 
   return (
-    <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 pb-24">
+    <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 pb-20">
       {/* Header & Metric Strip */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-2">
         <div>
@@ -361,16 +370,13 @@ export default function TeamLeaderConsole() {
               <span>Export CSV</span>
             </button>
 
-            {/* Tombol Tambah Task: Hanya muncul jika Superadmin (atau sesuaikan jika TL boleh nambah) */}
-            {isSuperAdmin && (
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>+</span>
-                <span>Tambah Task TL</span>
-              </button>
-            )}
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>+</span>
+              <span>Tambah Task TL</span>
+            </button>
 
             <button
               onClick={fetchTasks}
@@ -635,21 +641,22 @@ export default function TeamLeaderConsole() {
         )}
       </div>
 
-      {/* Footer / Panel Pojok Bawah (Informasi User & Tombol Logout) */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-zinc-200 px-6 py-3 flex items-center justify-between text-xs shadow-lg z-40">
-        <div className="flex items-center gap-2 text-zinc-600 font-medium">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Login sebagai: <strong className="text-zinc-900">{typeof window !== 'undefined' ? localStorage.getItem('userEmail') : ''}</strong></span>
+      {/* Footer / Panel Pojok Bawah (Minimalis & Ringkas) */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xs border-t border-zinc-200/80 px-4 py-2 flex items-center justify-between text-xs shadow-md z-40">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
+          <span className="text-zinc-600">
+            Login: <strong className="text-zinc-900">{typeof window !== 'undefined' ? localStorage.getItem('userEmail') : ''}</strong>
+          </span>
           <span className="px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[10px] font-bold uppercase text-zinc-700">
-            Role: {typeof window !== 'undefined' ? localStorage.getItem('userRole') : ''}
+            {typeof window !== 'undefined' ? localStorage.getItem('userRole') : ''}
           </span>
         </div>
         <button
           onClick={handleLogout}
-          className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded border border-rose-200 transition cursor-pointer text-xs"
         >
-          <span>🚪</span>
-          <span>Logout Sistem</span>
+          Logout
         </button>
       </div>
 
@@ -663,7 +670,7 @@ export default function TeamLeaderConsole() {
             </div>
             <form onSubmit={handleAddTask} className="p-5 space-y-4 overflow-y-auto text-xs">
               <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Assign PIC</label>
+                <label className="block font-bold text-zinc-900">Assign PIC (Opsional - Kosongkan jika untuk task pribadi)</label>
                 <div className="flex flex-wrap gap-1.5">
                   {PICS.map((pic) => (
                     <button
