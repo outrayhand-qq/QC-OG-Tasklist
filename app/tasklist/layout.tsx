@@ -22,6 +22,9 @@ export default function TaskListLayout({
 
   const isSuperAdmin = userRole === 'superadmin'
 
+  // Cek apakah halaman aktif saat ini berada di Task TL
+  const isTaskTLActive = pathname === '/tasklist/tl' // Sesuaikan jika rute Task TL Anda berbeda
+
   return (
     <div className="min-h-screen bg-zinc-50/50 flex flex-col md:flex-row">
       {/* Sidebar Kiri */}
@@ -40,7 +43,7 @@ export default function TaskListLayout({
           {/* Navigasi Menu */}
           <nav className="space-y-6 text-xs font-medium">
             
-            {/* MENU SPESIAL SUPERADMIN (Disembunyikan jika yang login TL QC / TL OG) */}
+            {/* MENU SPESIAL SUPERADMIN */}
             {isSuperAdmin && (
               <div className="space-y-2">
                 <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block px-2">
@@ -71,15 +74,18 @@ export default function TaskListLayout({
                 Operasional Harian
               </span>
               <div className="space-y-0.5">
-                <div className="p-2.5 rounded-lg bg-zinc-100/80 border border-zinc-200/60 text-zinc-900 font-bold space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span>📋</span>
-                    <span>Tasklist Operasional</span>
-                  </div>
-                  <div className="pl-6 text-[11px] text-zinc-900 font-extrabold">
-                    • Task TL (QC & OG)
-                  </div>
-                </div>
+                {/* Tombol kembali ke Task TL (QC & OG) */}
+                <Link
+                  href="/tasklist/tl"
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition ${
+                    isTaskTLActive
+                      ? 'bg-black text-white font-bold'
+                      : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                  }`}
+                >
+                  <span>📋</span>
+                  <span>Task TL (QC & OG)</span>
+                </Link>
               </div>
             </div>
 
