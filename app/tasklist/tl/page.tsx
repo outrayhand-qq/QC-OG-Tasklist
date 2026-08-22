@@ -53,6 +53,8 @@ export default function TeamLeaderConsole() {
 
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState<boolean>(true)
+  const [userRole, setUserRole] = useState<string>('')
+  const [userEmail, setUserEmail] = useState<string>('')
 
   const [selectedDivisi, setSelectedDivisi] = useState<'All' | 'TL QC' | 'TL OG'>('All')
   const [selectedKategori, setSelectedKategori] = useState<string>('All')
@@ -79,19 +81,33 @@ export default function TeamLeaderConsole() {
   const [editFeedback, setEditFeedback] = useState('')
   const [editBuktiUrl, setEditBuktiUrl] = useState('')
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const role = (localStorage.getItem('userRole') || '').toLowerCase().trim()
+      const email = localStorage.getItem('userEmail') || ''
+      setUserRole(role)
+      setUserEmail(email)
+
+      if (role === 'tlqc') setSelectedDivisi('TL QC')
+      else if (role === 'tlog') setSelectedDivisi('TL OG')
+      else setSelectedDivisi('All')
+    }
+  }, [])
+
+  // FUNGSI FETCH TASKS DENGAN FILTER PERMISSION KETAT
   const fetchTasks = async () => {
     setLoading(true)
-    const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : ''
+    const role = (typeof window !== 'undefined' ? localStorage.getItem('userRole') || '' : '').toLowerCase().trim()
 
     let query = supabase.from('db_tasklist').select('*')
 
-    // Filter ketat database berdasarkan role login (Task QC vs Task OG)
-    if (userRole === 'tlqc') {
+    // Filter ketat berdasarkan role agar tidak bocor
+    if (role === 'tlqc') {
       query = query.ilike('pic_assignment', '%qc%')
-    } else if (userRole === 'tlog') {
+    } else if (role === 'tlog') {
       query = query.or('pic_assignment.ilike.%outgoing%,pic_assignment.ilike.%og%')
     }
-    // Jika superadmin, tampilkan semua task penuh
+    // Jika superadmin, dibiarkan mengambil semua data
 
     const { data, error } = await query.order('created_at', { ascending: false })
 
@@ -99,7 +115,18 @@ export default function TeamLeaderConsole() {
       console.error('Error fetching tasks:', error.message)
     }
     if (!error && data) {
-      setTasks(data)
+      // Filter lapis kedua di sisi frontend untuk memastikan keamanan mutlak
+      let filtered = data
+      if (role === 'tlqc') {
+        filtered = data.filter((t) => t.pic_assignment?.toLowerCase().includes('qc'))
+      } else if (role === 'tlog') {
+        filtered = data.filter(
+          (t) =>
+            t.pic_assignment?.toLowerCase().includes('outgoing') ||
+            t.pic_assignment?.toLowerCase().includes('og')
+        )
+      }
+      setTasks(filtered)
     }
     setLoading(false)
   }
@@ -157,10 +184,7 @@ export default function TeamLeaderConsole() {
       return
     }
 
-    const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : ''
     let assignedPic = selectedPics.join(', ')
-
-    // Jika PIC tidak dipilih saat buat task, otomatis assign ke role masing-masing
     if (!assignedPic) {
       if (userRole === 'tlqc') assignedPic = 'TL QC'
       else if (userRole === 'tlog') assignedPic = 'TL Outgoing'
@@ -323,7 +347,16 @@ export default function TeamLeaderConsole() {
     return dateStr
   }
 
-  const isSuperAdmin = typeof window !== 'undefined' && localStorage.getItem('userRole') === 'superadmin'
+  const isSuperAdmin = userRole === 'superadmin'
+
+  // Label role yang rapi untuk ditampilkan di footer
+  const displayRoleLabel = isSuperAdmin
+    ? 'SUPERADMIN'
+    : userRole === 'tlqc'
+    ? 'TL QC'
+    : userRole === 'tlog'
+    ? 'TL OUTGOING'
+    : userRole.toUpperCase()
 
   return (
     <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 pb-20">
@@ -331,10 +364,14 @@ export default function TeamLeaderConsole() {
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-2">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight text-zinc-900">
-            Team Leader Management Dashboard
+            {isSuperAdmin
+              ? 'Team Leader Management Dashboard'
+              : userRole === 'tlqc'
+              ? 'Tasklist Operasional TL QC'
+              : 'Tasklist Operasional TL Outgoing'}
           </h1>
           <p className="text-xs text-zinc-500 mt-1">
-           Daily Tracker Log Activity & Tasklist Team Leader QC & Outgoing.
+            Daily Tracker Log Activity & Tasklist Performance.
           </p>
         </div>
 
@@ -375,7 +412,7 @@ export default function TeamLeaderConsole() {
               className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <span>+</span>
-              <span>Tambah Task TL</span>
+              <span>Tambah Task</span>
             </button>
 
             <button
@@ -388,22 +425,24 @@ export default function TeamLeaderConsole() {
         </div>
       </div>
 
-      {/* Divisi Tabs */}
-      <div className="flex items-center gap-1">
-        {(['All', 'TL QC', 'TL OG'] as const).map((div) => (
-          <button
-            key={div}
-            onClick={() => setSelectedDivisi(div)}
-            className={`px-4 py-1.5 text-xs font-bold rounded transition cursor-pointer ${
-              selectedDivisi === div
-                ? 'bg-white text-zinc-900 shadow-2xs border border-zinc-200/90'
-                : 'text-zinc-500 hover:text-zinc-800'
-            }`}
-          >
-            {div === 'All' ? 'Semua TL' : div}
-          </button>
-        ))}
-      </div>
+      {/* Divisi Tabs: HANYA MUNCUL JIKA SUPERADMIN */}
+      {isSuperAdmin && (
+        <div className="flex items-center gap-1">
+          {(['All', 'TL QC', 'TL OG'] as const).map((div) => (
+            <button
+              key={div}
+              onClick={() => setSelectedDivisi(div)}
+              className={`px-4 py-1.5 text-xs font-bold rounded transition cursor-pointer ${
+                selectedDivisi === div
+                  ? 'bg-white text-zinc-900 shadow-2xs border border-zinc-200/90'
+                  : 'text-zinc-500 hover:text-zinc-800'
+              }`}
+            >
+              {div === 'All' ? 'Semua TL' : div}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Toolbar Filter */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-2.5 rounded-lg border border-zinc-200/80 shadow-2xs">
@@ -641,22 +680,25 @@ export default function TeamLeaderConsole() {
         )}
       </div>
 
-      {/* Footer / Panel Pojok Bawah (Minimalis & Ringkas) */}
+      {/* Footer / Panel Pojok Bawah (Email + Badge Role Sesuai & Icon Logout) */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xs border-t border-zinc-200/80 px-4 py-2 flex items-center justify-between text-xs shadow-md z-40">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
-          <span className="text-zinc-600">
-            Login: <strong className="text-zinc-900">{typeof window !== 'undefined' ? localStorage.getItem('userEmail') : ''}</strong>
+          <span className="text-zinc-700 font-medium">
+            {userEmail}
           </span>
-          <span className="px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[10px] font-bold uppercase text-zinc-700">
-            {typeof window !== 'undefined' ? localStorage.getItem('userRole') : ''}
+          <span className="px-2.5 py-0.5 bg-zinc-900 text-white rounded text-[10px] font-extrabold tracking-wider uppercase">
+            {displayRoleLabel}
           </span>
         </div>
         <button
           onClick={handleLogout}
-          className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded border border-rose-200 transition cursor-pointer text-xs"
+          title="Keluar Sistem"
+          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded border border-rose-200 transition cursor-pointer flex items-center justify-center"
         >
-          Logout
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
         </button>
       </div>
 
