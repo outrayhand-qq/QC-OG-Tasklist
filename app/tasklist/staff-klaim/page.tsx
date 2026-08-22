@@ -49,10 +49,13 @@ export default function StaffKlaimDashboard() {
     fetchDataFromSheet()
   }, [])
 
+  // Helper cerdas mencari key tanpa terpengaruh huruf besar/kecil atau spasi/simbol
   const getVal = (item: any, possibleKeys: string[]) => {
+    const itemKeys = Object.keys(item)
     for (const key of possibleKeys) {
-      const found = Object.keys(item).find(
-        (k) => k.toLowerCase().replace(/[\s_]/g, '') === key.toLowerCase().replace(/[\s_]/g, '')
+      const cleanKey = key.toLowerCase().replace(/[\s_]/g, '')
+      const found = itemKeys.find(
+        (k) => k.toLowerCase().replace(/[\s_]/g, '') === cleanKey
       )
       if (found !== undefined && item[found] !== null && item[found] !== '' && item[found] !== 'undefined') {
         return item[found]
@@ -61,29 +64,42 @@ export default function StaffKlaimDashboard() {
     return ''
   }
 
-  // Opsi Dropdown Unik yang Fleksibel & Terurut
+  // Ekstraksi nilai bulan yang lebih cerdas (mendukung teks bulan maupun format tanggal)
+  const extractMonth = (item: any) => {
+    // Cek langsung kolom bulan
+    let val = String(getVal(item, ['bulan', 'month']))
+    if (val && val !== '-' && val.toLowerCase() !== 'invalid date') return val.trim()
+
+    // Jika kolom bulan kosong, coba ambil dari tanggal (date_added)
+    const dateVal = getVal(item, ['date_added', 'dateadded', 'tgl_pengajuan_ez'])
+    if (dateVal) {
+      try {
+        const d = new Date(dateVal)
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+        }
+        return String(dateVal)
+      } catch {
+        return String(dateVal)
+      }
+    }
+    return ''
+  }
+
+  // Opsi Dropdown Unik (User & Bulan & Status)
   const uniqueUsers = useMemo(() => {
-    return Array.from(
-      new Set(
-        data.map(item => String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff']))).filter(val => val && val !== 'undefined' && val !== 'null')
-      )
-    ).sort()
+    const list = data.map(item => String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff'])).trim())
+    return Array.from(new Set(list)).filter(val => val && val !== 'undefined' && val !== 'null' && val !== '-').sort()
   }, [data])
 
   const uniqueBulan = useMemo(() => {
-    return Array.from(
-      new Set(
-        data.map(item => String(getVal(item, ['bulan', 'month']))).filter(val => val && val !== 'undefined' && val !== 'null')
-      )
-    ).sort()
+    const list = data.map(item => extractMonth(item))
+    return Array.from(new Set(list)).filter(val => val && val !== 'undefined' && val !== 'null' && val !== '-').sort()
   }, [data])
 
   const uniqueStatus = useMemo(() => {
-    return Array.from(
-      new Set(
-        data.map(item => String(getVal(item, ['final_status', 'finalstatus', 'statusfinal']))).filter(val => val && val !== 'undefined' && val !== 'null')
-      )
-    ).sort()
+    const list = data.map(item => String(getVal(item, ['final_status', 'finalstatus', 'statusfinal'])).trim())
+    return Array.from(new Set(list)).filter(val => val && val !== 'undefined' && val !== 'null' && val !== '-').sort()
   }, [data])
 
   // 1. FILTER DATA UTAMA
@@ -92,20 +108,21 @@ export default function StaffKlaimDashboard() {
       const awb = String(getVal(item, ['no_awb', 'noawb'])).toLowerCase()
       const client = String(getVal(item, ['client_name', 'clientname'])).toLowerCase()
       const ket = String(getVal(item, ['keterangan'])).toLowerCase()
-      const ekspedisiVal = String(getVal(item, ['jenis_ekspedisi', 'jenisekspedisi']))
-      const caseVal = String(getVal(item, ['kategori_case', 'kategoricase']))
-      const userVal = String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff']))
-      const bulanVal = String(getVal(item, ['bulan', 'month']))
-      const statusVal = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal']))
+      
+      const ekspedisiVal = String(getVal(item, ['jenis_ekspedisi', 'jenisekspedisi'])).trim()
+      const caseVal = String(getVal(item, ['kategori_case', 'kategoricase'])).trim()
+      const userVal = String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff'])).trim()
+      const bulanVal = extractMonth(item)
+      const statusVal = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal'])).trim()
 
       const query = searchQuery.toLowerCase()
       const matchesSearch = awb.includes(query) || client.includes(query) || ket.includes(query)
       
-      const matchesEkspedisi = selectedEkspedisi === 'All' || ekspedisiVal === selectedEkspedisi
-      const matchesCase = selectedCase === 'All' || caseVal === selectedCase
-      const matchesUser = selectedUser === 'All' || userVal === selectedUser
-      const matchesBulan = selectedBulan === 'All' || bulanVal === selectedBulan
-      const matchesStatus = selectedStatus === 'All' || statusVal === selectedStatus
+      const matchesEkspedisi = selectedEkspedisi === 'All' || ekspedisiVal.toLowerCase() === selectedEkspedisi.toLowerCase()
+      const matchesCase = selectedCase === 'All' || caseVal.toLowerCase() === selectedCase.toLowerCase()
+      const matchesUser = selectedUser === 'All' || userVal.toLowerCase() === selectedUser.toLowerCase()
+      const matchesBulan = selectedBulan === 'All' || bulanVal.toLowerCase() === selectedBulan.toLowerCase()
+      const matchesStatus = selectedStatus === 'All' || statusVal.toLowerCase() === selectedStatus.toLowerCase()
 
       return matchesSearch && matchesEkspedisi && matchesCase && matchesUser && matchesBulan && matchesStatus
     })
