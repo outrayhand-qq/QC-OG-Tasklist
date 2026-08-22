@@ -39,7 +39,19 @@ export default function LoginPage() {
         return
       }
 
- const nowWIB = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T') + '+07:00'
+     // 2. Buat string waktu spesifik zona waktu Indonesia (WIB / UTC+7) yang presisi
+      const options = { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false } as const
+      const formatter = new Intl.DateTimeFormat('en-CA', options)
+      const parts = formatter.formatToParts(new Date())
+      
+      const year = parts.find(p => p.type === 'year')?.value
+      const month = parts.find(p => p.type === 'month')?.value
+      const day = parts.find(p => p.type === 'day')?.value
+      const hour = parts.find(p => p.type === 'hour')?.value
+      const minute = parts.find(p => p.type === 'minute')?.value
+      const second = parts.find(p => p.type === 'second')?.value
+
+      const nowWIB = `${year}-${month}-${day} ${hour}:${minute}:${second}+07`
 
       // 3. Catat log login ke database Supabase dengan waktu WIB
       await supabase
@@ -54,12 +66,12 @@ export default function LoginPage() {
         .select()
         .then(() => {}) // Abaikan jika tabel log belum ada
 
-      // 3. Simpan sesi & role di browser
+      // 4. Simpan sesi & role di browser
       localStorage.setItem('isLoggedIn', 'true')
       localStorage.setItem('userEmail', userData.email)
-      localStorage.setItem('userRole', userData.role) // Menyimpan: superadmin, tlqc, atau tlog
+      localStorage.setItem('userRole', userData.role)
 
-      // 4. Redirect semua role ke halaman /tasklist/tl yang sudah tersedia
+      // 5. Redirect ke halaman tasklist
       router.push('/tasklist/tl')
 
     } catch (err: any) {
@@ -78,7 +90,7 @@ export default function LoginPage() {
             QC&OG<br />Monitoring.
           </h1>
           <p className="text-xs text-zinc-500 font-medium">
-            Access your dashboard performance.
+            Dashboard performance.
           </p>
         </div>
 
