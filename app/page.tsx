@@ -55,7 +55,7 @@ export default function LoginPage() {
         
         {/* Header Title */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-black tracking-tight text-zinc-900 leading-tight">
+          <h1 className="text-6xl font-black tracking-tight text-zinc-900 leading-tight">
             QC&OG<br />Monitoring.
           </h1>
           <p className="text-xs text-zinc-500 font-medium">
