@@ -81,10 +81,19 @@ export default function TeamLeaderConsole() {
 
   const fetchTasks = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('db_tasklist')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : ''
+
+    let query = supabase.from('db_tasklist').select('*')
+
+    // Filter otomatis berdasarkan role
+    if (userRole === 'tlqc') {
+      query = query.ilike('pic_assignment', '%qc%')
+    } else if (userRole === 'tlog') {
+      query = query.or('pic_assignment.ilike.%outgoing%,pic_assignment.ilike.%og%')
+    }
+    // Jika superadmin, query bebas tanpa filter (akses penuh)
+
+    const { data, error } = await query.order('created_at', { ascending: false })
 
     if (error) {
       console.error('Error fetching tasks:', error.message)
@@ -98,6 +107,11 @@ export default function TeamLeaderConsole() {
   useEffect(() => {
     fetchTasks()
   }, [])
+
+  const handleLogout = () => {
+    localStorage.clear()
+    router.push('/')
+  }
 
   const handleAddFeedbackLog = async (taskId: string, newEntry: string) => {
     const cleanEntry = newEntry.trim()
@@ -299,8 +313,11 @@ export default function TeamLeaderConsole() {
     return dateStr
   }
 
+  // Cek apakah user yang login adalah superadmin
+  const isSuperAdmin = typeof window !== 'undefined' && localStorage.getItem('userRole') === 'superadmin'
+
   return (
-    <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6">
+    <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 pb-24">
       {/* Header & Metric Strip */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-2">
         <div>
@@ -343,13 +360,18 @@ export default function TeamLeaderConsole() {
               <span>⤓</span>
               <span>Export CSV</span>
             </button>
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>+</span>
-              <span>Tambah Task TL</span>
-            </button>
+
+            {/* Tombol Tambah Task: Hanya muncul jika Superadmin (atau sesuaikan jika TL boleh nambah) */}
+            {isSuperAdmin && (
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>+</span>
+                <span>Tambah Task TL</span>
+              </button>
+            )}
+
             <button
               onClick={fetchTasks}
               className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition cursor-pointer"
@@ -611,6 +633,24 @@ export default function TeamLeaderConsole() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Footer / Panel Pojok Bawah (Informasi User & Tombol Logout) */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-zinc-200 px-6 py-3 flex items-center justify-between text-xs shadow-lg z-40">
+        <div className="flex items-center gap-2 text-zinc-600 font-medium">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Login sebagai: <strong className="text-zinc-900">{typeof window !== 'undefined' ? localStorage.getItem('userEmail') : ''}</strong></span>
+          <span className="px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[10px] font-bold uppercase text-zinc-700">
+            Role: {typeof window !== 'undefined' ? localStorage.getItem('userRole') : ''}
+          </span>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+        >
+          <span>🚪</span>
+          <span>Logout Sistem</span>
+        </button>
       </div>
 
       {/* Modal Tambah Task */}

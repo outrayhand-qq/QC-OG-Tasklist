@@ -49,14 +49,17 @@ export default function LoginPage() {
           },
         ])
 
-      // 3. Simpan sesi & role di browser
+ // Simpan sesi & role di browser
       localStorage.setItem('isLoggedIn', 'true')
       localStorage.setItem('userEmail', userData.email)
-      localStorage.setItem('userRole', userData.role)
+      localStorage.setItem('userRole', userData.role) // Menyimpan: superadmin, tlqc, atau tlog
+
+      // SEMUA ROLE diarahkan ke halaman utama dashboard tasklist
+      router.push('/tasklist/tl')
 
       // 4. Redirect sesuai role
       if (userData.role === 'superadmin') {
-        router.push('/tasklist/superadmin') // Arahkan ke halaman superadmin
+        router.push('/tasklist/') // Arahkan ke halaman superadmin
       } else {
         router.push('/tasklist/tl') // Arahkan TL hanya ke halaman task list
       }
