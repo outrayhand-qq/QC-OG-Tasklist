@@ -42,6 +42,28 @@ const formatRupiah = (angka: number) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka)
 }
 
+// ✅ FUNGSI BARU: Generate bulan dari date_added
+const generateBulanFromDate = (dateString: string): string => {
+  if (!dateString || dateString === '-') return ''
+  
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return ''
+    
+    const bulanMap = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ]
+    
+    const bulan = bulanMap[date.getMonth()]
+    const tahun = date.getFullYear()
+    
+    return `${bulan} ${tahun}`
+  } catch {
+    return ''
+  }
+}
+
 export default function TrackerKlaimDashboard() {
   const router = useRouter()
   
@@ -86,8 +108,6 @@ export default function TrackerKlaimDashboard() {
       const response = await fetch('https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec')
       const result: any = await response.json()
       
-      console.log('🔍 RAW API RESPONSE:', result)
-      
       let rawArray: any = result.data || result.rows || result || []
       
       if (!Array.isArray(rawArray)) {
@@ -96,101 +116,64 @@ export default function TrackerKlaimDashboard() {
         else rawArray = []
       }
 
-      console.log('🔍 RAW ARRAY LENGTH:', rawArray.length)
-      console.log(' FIRST ROW:', rawArray[0])
-      console.log('🔍 IS ARRAY OF ARRAYS:', rawArray.length > 0 && Array.isArray(rawArray[0]))
-
       const isArrayOfArrays = rawArray.length > 0 && Array.isArray(rawArray[0])
       let mappedData: KlaimData[] = []
 
       if (isArrayOfArrays) {
-        // Deteksi header untuk mapping kolom yang dinamis
         const firstRow = rawArray[0]
-        const headerRow: string[] = []
-        
-        // Cek apakah baris pertama adalah header
-        const isHeader = firstRow.some((cell: any) => {
-          const cellStr = String(cell).toLowerCase().trim()
-          return cellStr.includes('bulan') || cellStr.includes('user') || cellStr.includes('ekspedisi')
-        })
+        const isHeader = firstRow.some((cell: any) => typeof cell === 'string' && cell.toLowerCase().includes('bulan'))
+        const dataRows = isHeader ? rawArray.slice(1) : rawArray
 
-        let dataRows = rawArray
-        let colIndex: { [key: string]: number } = {}
-
-        if (isHeader) {
-          // Buat mapping kolom dari header
-          firstRow.forEach((cell: any, idx: number) => {
-            const colName = String(cell).toLowerCase().trim()
-            colIndex[colName] = idx
-          })
-          
-          console.log('🔍 COLUMN MAPPING:', colIndex)
-          console.log(' Index kolom "bulan":', colIndex['bulan'])
-          
-          dataRows = rawArray.slice(1)
-        } else {
-          // Fallback ke mapping manual jika tidak ada header
-          colIndex = {
-            'user': 0,
-            'jenis_ekspedisi': 1,
-            'date_added': 2,
-            'bulan': 3,
-            'client_name': 4,
-            'no_awb': 5,
-            'kategori_case': 6,
-            'update_status': 7,
-            'final_status': 8,
-            'keterangan': 9,
-            'tgl_mutasi': 10,
-            'nominal_claim': 11,
-            'sla': 12
-          }
+        const col = {
+          user: 0,
+          jenis_ekspedisi: 1,
+          date_added: 2,
+          bulan: 3,
+          client_name: 4,
+          no_awb: 5,
+          kategori_case: 6,
+          update_status: 7,
+          final_status: 8,
+          keterangan: 9,
+          tgl_mutasi: 10,
+          nominal_claim: 11,
+          sla: 12
         }
 
-        // Ambil index kolom bulan
-        const bulanIdx = colIndex['bulan'] !== undefined ? colIndex['bulan'] : 3
-        
         mappedData = dataRows.map((row: any[], index: number) => {
-          const bulanRaw = row[bulanIdx]
-          const bulanStr = String(bulanRaw || '').trim()
-          
-          // Log beberapa baris pertama untuk debugging
-          if (index < 5) {
-            console.log(`🔍 Row ${index} - Bulan raw:`, bulanRaw, '| Bulan string:', bulanStr, '| Type:', typeof bulanRaw)
-          }
+          const dateAdded = String(row[col.date_added] || '')
+          // ✅ GENERATE BULAN DARI DATE_ADDED (TIDAK BERGANTUNG KOLOM BULAN)
+          const generatedBulan = generateBulanFromDate(dateAdded)
           
           return {
             id: String(row[0] || index + 1),
-            user: String(row[colIndex['user'] ?? 0] || 'Staff'),
-            jenis_ekspedisi: String(row[colIndex['jenis_ekspedisi'] ?? 1] || '-'),
-            date_added: String(row[colIndex['date_added'] ?? 2] || new Date().toISOString()),
-            bulan: bulanStr,
-            client_name: String(row[colIndex['client_name'] ?? 4] || '-'),
-            no_awb: String(row[colIndex['no_awb'] ?? 5] || '-'),
-            kategori_case: String(row[colIndex['kategori_case'] ?? 6] || '-'),
-            update_status: String(row[colIndex['update_status'] ?? 7] || '-'),
-            final_status: row[colIndex['final_status'] ?? 8] || null,
-            keterangan: String(row[colIndex['keterangan'] ?? 9] || ''),
-            tgl_mutasi: row[colIndex['tgl_mutasi'] ?? 10] || null,
-            nominal_claim: Number(row[colIndex['nominal_claim'] ?? 11] || 0),
-            sla: String(row[colIndex['sla'] ?? 12] || '-')
+            user: String(row[col.user] || 'Staff'),
+            jenis_ekspedisi: String(row[col.jenis_ekspedisi] || '-'),
+            date_added: dateAdded,
+            bulan: generatedBulan, // ✅ PAKAI HASIL GENERATE
+            client_name: String(row[col.client_name] || '-'),
+            no_awb: String(row[col.no_awb] || '-'),
+            kategori_case: String(row[col.kategori_case] || '-'),
+            update_status: String(row[col.update_status] || '-'),
+            final_status: row[col.final_status] || null,
+            keterangan: String(row[col.keterangan] || ''),
+            tgl_mutasi: row[col.tgl_mutasi] || null,
+            nominal_claim: Number(row[col.nominal_claim] || 0),
+            sla: String(row[col.sla] || '-')
           }
         })
       } else {
-        // Data berupa array of objects
         mappedData = rawArray.map((item: any, index: number) => {
-          const bulanStr = String(item.bulan || item.BULAN || '').trim()
-          
-          if (index < 5) {
-            console.log(`🔍 Object Row ${index} - Bulan:`, bulanStr)
-          }
+          const dateAdded = String(item.date_added || item.DATE_ADDED || item.tgl_masuk || '')
+          // ✅ GENERATE BULAN DARI DATE_ADDED
+          const generatedBulan = generateBulanFromDate(dateAdded)
           
           return {
             id: String(item.id || item.ID || index + 1),
             user: String(item.user || item.USER || item.pic_staff || 'Staff'),
             jenis_ekspedisi: String(item.jenis_ekspedisi || item.JENIS_EKSPEDISI || item.ekspedisi || '-'),
-            date_added: String(item.date_added || item.DATE_ADDED || item.tgl_masuk || new Date().toISOString()),
-            bulan: bulanStr,
+            date_added: dateAdded,
+            bulan: generatedBulan, // ✅ PAKAI HASIL GENERATE
             client_name: String(item.client_name || item.CLIENT_NAME || item.klien || '-'),
             no_awb: String(item.no_awb || item.NO_AWB || item.awb || '-'),
             kategori_case: String(item.kategori_case || item.KATEGORI_CASE || item.kasus || '-'),
@@ -204,9 +187,7 @@ export default function TrackerKlaimDashboard() {
         })
       }
 
-      // Debug: Tampilkan semua unique bulan values
-      const uniqueBulan = [...new Set(mappedData.map(d => d.bulan).filter(Boolean))]
-      console.log('✅ UNIQUE BULAN VALUES (Total:', uniqueBulan.length, '):', uniqueBulan)
+      console.log('✅ Sample bulan values:', mappedData.slice(0, 10).map(d => d.bulan))
 
       setData(mappedData)
       
@@ -217,7 +198,7 @@ export default function TrackerKlaimDashboard() {
       setSyncInfo({ time: timeStr, status: 'success' })
       localStorage.setItem('lastKlaimSync', timeStr)
     } catch (err) {
-      console.error('❌ Gagal mengambil data:', err)
+      console.error('Gagal mengambil data:', err)
       setSyncInfo(prev => ({ ...prev, status: 'error' }))
     } finally {
       setLoading(false)
@@ -240,17 +221,13 @@ export default function TrackerKlaimDashboard() {
       if (bulanValue === '' || bulanValue === '-' || bulanValue.toLowerCase() === 'null') {
         setBulan.add('(Tanpa Bulan)')
       } else {
-        // Simpan nilai bulan APA ADANYA dari data
         setBulan.add(bulanValue)
       }
     })
     
     const allBulan = Array.from(setBulan)
-    
-    // Sort: pisahkan "(Tanpa Bulan)", lalu sort sisanya
     const tanpaBulan = allBulan.filter(b => b === '(Tanpa Bulan)')
     const withBulan = allBulan.filter(b => b !== '(Tanpa Bulan)').sort((a, b) => {
-      // Parse untuk sorting yang lebih baik (YYYY-MM)
       const parseBulan = (bulanStr: string) => {
         const parts = bulanStr.split(' ')
         const bulanName = parts[0]
@@ -349,7 +326,6 @@ export default function TrackerKlaimDashboard() {
           return dataBulan === '' || dataBulan === '-' || dataBulan.toLowerCase() === 'null'
         }
         
-        // Compare full string (case insensitive)
         return dataBulan.toLowerCase() === filterBulan.toLowerCase()
       })
     }
@@ -536,7 +512,7 @@ export default function TrackerKlaimDashboard() {
               onChange={(e) => setSearch(e.target.value)} 
               className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition" 
             />
-            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm"></span>
+            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm">🔍</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -564,7 +540,7 @@ export default function TrackerKlaimDashboard() {
             </select>
             
             <button onClick={exportToCSV} className="ml-2 px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5">
-               Export CSV
+              ⤓ Export CSV
             </button>
           </div>
         </div>
@@ -645,7 +621,7 @@ export default function TrackerKlaimDashboard() {
 
                       <td className="px-5 py-4 text-center font-mono text-[11px] space-y-1">
                         <div className="text-zinc-600 flex items-center justify-center gap-1">
-                          <span className="text-blue-500"></span> Masuk: {!isNaN(item.tglMasukObj.getTime()) ? item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'}) : '-'}
+                          <span className="text-blue-500">📥</span> Masuk: {!isNaN(item.tglMasukObj.getTime()) ? item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'}) : '-'}
                         </div>
                         {item.isFinal && item.tglMutasiObj && !isNaN(item.tglMutasiObj.getTime()) && (
                           <div className="text-zinc-600 flex items-center justify-center gap-1">
