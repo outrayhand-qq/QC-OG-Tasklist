@@ -21,43 +21,87 @@ type KlaimData = {
   sla: string
 }
 
-// --- HELPER FUNCTIONS ---
+type ProcessedData = KlaimData & {
+  agingDays: number
+  isFinal: boolean
+  isClosed: boolean
+  agingStatus: 'green' | 'yellow' | 'red'
+  tglMasukObj: Date
+  tglMutasiObj: Date | null
+}
+
+// --- HELPER: Parse Tag Keterangan ---
 const parseTagKeterangan = (text: string) => {
+  if (!text || text.trim() === '') return { tags: [] as string[], sisaTeks: '' }
+
   const tags: string[] = []
-  const lowerText = text.toLowerCase()
-  if (lowerText.includes('rentan bocor')) tags.push('Barang Rentan Bocor')
-  if (lowerText.includes('clear case') || lowerText.includes('fisik datang')) tags.push('Fisik Datang ke Gudang')
-  if (lowerText.includes('alur update')) tags.push('Alur Update')
-  
+  const lowerText = text.toLowerCase().trim()
+
+  const tagMappings = [
+    { keyword: 'packing tidak sesuai sop ekspedisi', tag: 'Packing Tidak Sesuai SOP Ekspedisi' },
+    { keyword: 'packing tidak sesuai', tag: 'Packing Tidak Sesuai SOP' },
+    { keyword: 'tidak sesuai sop', tag: 'Tidak Sesuai SOP' },
+    { keyword: 'rentan bocor', tag: 'Barang Rentan Bocor' },
+    { keyword: 'clear case', tag: 'Clear Case' },
+    { keyword: 'fisik datang', tag: 'Fisik Datang ke Gudang' },
+    { keyword: 'alur update', tag: 'Alur Update' },
+    { keyword: 'barang rusak', tag: 'Barang Rusak' },
+    { keyword: 'barang hilang', tag: 'Barang Hilang' },
+    { keyword: 'salah kirim', tag: 'Salah Kirim' },
+    { keyword: 'retur bermasalah', tag: 'Retur Bermasalah' },
+    { keyword: 'paket stuck', tag: 'Paket Stuck' },
+    { keyword: 'paket hilang', tag: 'Paket Hilang' }
+  ]
+
+  tagMappings.forEach(({ keyword, tag }) => {
+    if (lowerText.includes(keyword) && !tags.includes(tag)) {
+      tags.push(tag)
+    }
+  })
+
+  // Hapus tag yang sudah terdeteksi dari teks
   let sisaTeks = text
   tags.forEach(t => {
-    const regex = new RegExp(t, 'ig')
+    const regex = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig')
     sisaTeks = sisaTeks.replace(regex, '').trim()
   })
+
+  // Bersihkan karakter aneh
   sisaTeks = sisaTeks.replace(/^[^\w\s]+|[^\w\s]+$/g, '').trim()
+
+  // Jika tidak ada tag terdeteksi, tampilkan seluruh teks sebagai sisaTeks
+  if (tags.length === 0 && sisaTeks) {
+    return { tags: [], sisaTeks }
+  }
+
   return { tags, sisaTeks }
 }
 
+// --- HELPER: Format Rupiah ---
 const formatRupiah = (angka: number) => {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka)
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0
+  }).format(angka)
 }
 
-// ✅ FUNGSI BARU: Generate bulan dari date_added
+// --- HELPER: Generate Bulan dari date_added ---
 const generateBulanFromDate = (dateString: string): string => {
-  if (!dateString || dateString === '-') return ''
-  
+  if (!dateString || dateString === '-' || dateString === 'null') return ''
+
   try {
     const date = new Date(dateString)
     if (isNaN(date.getTime())) return ''
-    
+
     const bulanMap = [
       'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
       'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ]
-    
+
     const bulan = bulanMap[date.getMonth()]
     const tahun = date.getFullYear()
-    
+
     return `${bulan} ${tahun}`
   } catch {
     return ''
@@ -66,8 +110,8 @@ const generateBulanFromDate = (dateString: string): string => {
 
 export default function TrackerKlaimDashboard() {
   const router = useRouter()
-  
-  // --- STATE MANAGEMENT ---
+
+  // --- STATE ---
   const [data, setData] = useState<KlaimData[]>([])
   const [loading, setLoading] = useState(true)
   const [syncInfo, setSyncInfo] = useState({ time: '', status: 'idle' })
@@ -79,9 +123,13 @@ export default function TrackerKlaimDashboard() {
   const [filterKategori, setFilterKategori] = useState('All')
   const [filterPic, setFilterPic] = useState('All')
   const [filterStatus, setFilterStatus] = useState('All')
+  const [filterAging, setFilterAging] = useState('All')
 
   // Sort & Pagination
-  const [sortConfig, setSortConfig] = useState<{ key: 'aging' | 'nominal' | null, direction: 'asc' | 'desc' }>({ key: null, direction: 'desc' })
+  const [sortConfig, setSortConfig] = useState<{ key: 'aging' | 'nominal' | null; direction: 'asc' | 'desc' }>({
+    key: null,
+    direction: 'desc'
+  })
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(50)
 
@@ -89,7 +137,7 @@ export default function TrackerKlaimDashboard() {
   useEffect(() => {
     const isLogged = localStorage.getItem('isLoggedIn')
     const role = (localStorage.getItem('userRole') || '').toLowerCase().trim()
-    
+
     if (!isLogged) {
       router.push('/')
       return
@@ -102,14 +150,17 @@ export default function TrackerKlaimDashboard() {
     }
   }, [router])
 
+  // --- FETCH DATA ---
   const fetchData = async () => {
     setSyncInfo(prev => ({ ...prev, status: 'loading' }))
     try {
-      const response = await fetch('https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec')
+      const response = await fetch(
+        'https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec'
+      )
       const result: any = await response.json()
-      
+
       let rawArray: any = result.data || result.rows || result || []
-      
+
       if (!Array.isArray(rawArray)) {
         const possibleArrays = Object.values(result).filter((v: any) => Array.isArray(v))
         if (possibleArrays.length > 0) rawArray = possibleArrays[0]
@@ -142,15 +193,12 @@ export default function TrackerKlaimDashboard() {
 
         mappedData = dataRows.map((row: any[], index: number) => {
           const dateAdded = String(row[col.date_added] || '')
-          // ✅ GENERATE BULAN DARI DATE_ADDED (TIDAK BERGANTUNG KOLOM BULAN)
-          const generatedBulan = generateBulanFromDate(dateAdded)
-          
           return {
             id: String(row[0] || index + 1),
             user: String(row[col.user] || 'Staff'),
             jenis_ekspedisi: String(row[col.jenis_ekspedisi] || '-'),
             date_added: dateAdded,
-            bulan: generatedBulan, // ✅ PAKAI HASIL GENERATE
+            bulan: generateBulanFromDate(dateAdded),
             client_name: String(row[col.client_name] || '-'),
             no_awb: String(row[col.no_awb] || '-'),
             kategori_case: String(row[col.kategori_case] || '-'),
@@ -165,15 +213,12 @@ export default function TrackerKlaimDashboard() {
       } else {
         mappedData = rawArray.map((item: any, index: number) => {
           const dateAdded = String(item.date_added || item.DATE_ADDED || item.tgl_masuk || '')
-          // ✅ GENERATE BULAN DARI DATE_ADDED
-          const generatedBulan = generateBulanFromDate(dateAdded)
-          
           return {
             id: String(item.id || item.ID || index + 1),
             user: String(item.user || item.USER || item.pic_staff || 'Staff'),
             jenis_ekspedisi: String(item.jenis_ekspedisi || item.JENIS_EKSPEDISI || item.ekspedisi || '-'),
             date_added: dateAdded,
-            bulan: generatedBulan, // ✅ PAKAI HASIL GENERATE
+            bulan: generateBulanFromDate(dateAdded),
             client_name: String(item.client_name || item.CLIENT_NAME || item.klien || '-'),
             no_awb: String(item.no_awb || item.NO_AWB || item.awb || '-'),
             kategori_case: String(item.kategori_case || item.KATEGORI_CASE || item.kasus || '-'),
@@ -187,14 +232,19 @@ export default function TrackerKlaimDashboard() {
         })
       }
 
-      console.log('✅ Sample bulan values:', mappedData.slice(0, 10).map(d => d.bulan))
-
       setData(mappedData)
-      
+
       const now = new Date()
-      const formatter = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
+      const formatter = new Intl.DateTimeFormat('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Jakarta'
+      })
       const timeStr = `${formatter.format(now)} WIB`
-      
+
       setSyncInfo({ time: timeStr, status: 'success' })
       localStorage.setItem('lastKlaimSync', timeStr)
     } catch (err) {
@@ -214,17 +264,15 @@ export default function TrackerKlaimDashboard() {
   // --- DYNAMIC FILTER LISTS ---
   const bulanList = useMemo(() => {
     const setBulan = new Set<string>()
-    
     data.forEach(d => {
       const bulanValue = d.bulan ? d.bulan.trim() : ''
-      
       if (bulanValue === '' || bulanValue === '-' || bulanValue.toLowerCase() === 'null') {
         setBulan.add('(Tanpa Bulan)')
       } else {
         setBulan.add(bulanValue)
       }
     })
-    
+
     const allBulan = Array.from(setBulan)
     const tanpaBulan = allBulan.filter(b => b === '(Tanpa Bulan)')
     const withBulan = allBulan.filter(b => b !== '(Tanpa Bulan)').sort((a, b) => {
@@ -232,20 +280,17 @@ export default function TrackerKlaimDashboard() {
         const parts = bulanStr.split(' ')
         const bulanName = parts[0]
         const tahun = parts[1] || '0000'
-        
         const bulanMap: Record<string, number> = {
           'Januari': 1, 'Februari': 2, 'Maret': 3, 'April': 4,
           'Mei': 5, 'Juni': 6, 'Juli': 7, 'Agustus': 8,
           'September': 9, 'Oktober': 10, 'November': 11, 'Desember': 12
         }
-        
         const bulanNum = bulanMap[bulanName] || 0
         return `${tahun}-${String(bulanNum).padStart(2, '0')}`
       }
-      
       return parseBulan(a).localeCompare(parseBulan(b))
     })
-    
+
     return ['All', ...tanpaBulan, ...withBulan]
   }, [data])
 
@@ -256,7 +301,7 @@ export default function TrackerKlaimDashboard() {
         setEks.add(d.jenis_ekspedisi.trim())
       }
     })
-    return ['All', ...Array.from(setEks)]
+    return ['All', ...Array.from(setEks).sort()]
   }, [data])
 
   const kategoriList = useMemo(() => {
@@ -266,19 +311,27 @@ export default function TrackerKlaimDashboard() {
         setKat.add(d.kategori_case.trim())
       }
     })
-    return ['All', ...Array.from(setKat)]
+    return ['All', ...Array.from(setKat).sort()]
   }, [data])
 
-  // --- DATA PROCESSING (AGING LOGIC) ---
-  const processedData = useMemo(() => {
+  // --- PROCESSING (AGING + CLOSED LOGIC) ---
+  const processedData: ProcessedData[] = useMemo(() => {
     const today = new Date()
-    
+
     return data.map(item => {
       const tglMasuk = new Date(item.date_added)
       let tglAkhir = today
       let isFinal = false
+      let isClosed = false
 
-      if (item.final_status && item.tgl_mutasi) {
+      const finalStatusLower = (item.final_status || '').toLowerCase()
+
+      // Cancel/Reject = CLOSED (aging berhenti)
+      if (finalStatusLower.includes('cancel') || finalStatusLower.includes('reject')) {
+        isFinal = true
+        isClosed = true
+        tglAkhir = tglMasuk
+      } else if (item.final_status && item.tgl_mutasi) {
         tglAkhir = new Date(item.tgl_mutasi)
         isFinal = true
       }
@@ -286,15 +339,23 @@ export default function TrackerKlaimDashboard() {
       const diffTime = Math.abs(tglAkhir.getTime() - tglMasuk.getTime())
       const agingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
-      let agingStatus = 'green'
+      let agingStatus: 'green' | 'yellow' | 'red' = 'green'
       if (agingDays >= 7 && agingDays <= 14) agingStatus = 'yellow'
       if (agingDays > 14) agingStatus = 'red'
 
-      return { ...item, agingDays, isFinal, agingStatus, tglMasukObj: tglMasuk, tglMutasiObj: item.tgl_mutasi ? new Date(item.tgl_mutasi) : null }
+      return {
+        ...item,
+        agingDays,
+        isFinal,
+        isClosed,
+        agingStatus,
+        tglMasukObj: tglMasuk,
+        tglMutasiObj: item.tgl_mutasi ? new Date(item.tgl_mutasi) : null
+      }
     })
   }, [data])
 
-  // --- PIC WORKLOAD AGGREGATION ---
+  // --- PIC WORKLOAD ---
   const picWorkload = useMemo(() => {
     const counts: Record<string, number> = {}
     processedData.forEach(d => {
@@ -311,25 +372,24 @@ export default function TrackerKlaimDashboard() {
 
     if (search) {
       const q = search.toLowerCase()
-      result = result.filter(d => 
-        d.no_awb.toLowerCase().includes(q) || 
-        d.client_name.toLowerCase().includes(q) || 
-        d.keterangan.toLowerCase().includes(q)
+      result = result.filter(
+        d =>
+          d.no_awb.toLowerCase().includes(q) ||
+          d.client_name.toLowerCase().includes(q) ||
+          d.keterangan.toLowerCase().includes(q)
       )
     }
-    
+
     if (filterBulan !== 'All') {
       result = result.filter(d => {
         const dataBulan = d.bulan ? d.bulan.trim() : ''
-        
         if (filterBulan === '(Tanpa Bulan)') {
           return dataBulan === '' || dataBulan === '-' || dataBulan.toLowerCase() === 'null'
         }
-        
         return dataBulan.toLowerCase() === filterBulan.toLowerCase()
       })
     }
-    
+
     if (filterEkspedisi !== 'All') {
       result = result.filter(d => d.jenis_ekspedisi.toLowerCase() === filterEkspedisi.toLowerCase())
     }
@@ -339,11 +399,32 @@ export default function TrackerKlaimDashboard() {
     if (filterPic !== 'All') {
       result = result.filter(d => d.user.toLowerCase() === filterPic.toLowerCase())
     }
+
+    // Filter Status
     if (filterStatus !== 'All') {
-      if (filterStatus === 'Open') result = result.filter(d => !d.isFinal)
-      else result = result.filter(d => (d.final_status || '').toLowerCase() === filterStatus.toLowerCase())
+      if (filterStatus === 'Open') {
+        result = result.filter(d => !d.final_status || d.final_status.trim() === '')
+      } else if (filterStatus === 'Approved Claim') {
+        result = result.filter(d => (d.final_status || '').toLowerCase().includes('approved'))
+      } else if (filterStatus === 'Cancel Claim') {
+        result = result.filter(d => (d.final_status || '').toLowerCase().includes('cancel'))
+      } else if (filterStatus === 'Reject Claim') {
+        result = result.filter(d => (d.final_status || '').toLowerCase().includes('reject'))
+      }
     }
 
+    // Filter Aging
+    if (filterAging !== 'All') {
+      result = result.filter(d => {
+        if (filterAging === 'Closed') return d.isClosed
+        if (filterAging === '<7') return !d.isClosed && d.agingDays < 7
+        if (filterAging === '7-14') return !d.isClosed && d.agingDays >= 7 && d.agingDays <= 14
+        if (filterAging === '>14') return !d.isClosed && d.agingDays > 14
+        return true
+      })
+    }
+
+    // Sort
     if (sortConfig.key) {
       result.sort((a, b) => {
         if (sortConfig.key === 'aging') {
@@ -357,13 +438,13 @@ export default function TrackerKlaimDashboard() {
     }
 
     return result
-  }, [processedData, search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, sortConfig])
+  }, [processedData, search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, filterAging, sortConfig])
 
-  // --- SUMMARY STATS ---
+  // --- STATS ---
   const stats = useMemo(() => {
     let totalKasus = filteredData.length
     let totalKasusNominal = filteredData.reduce((acc, d) => acc + d.nominal_claim, 0)
-    
+
     let pengajuanResi = 0
     let pengajuanNominal = 0
     let approvedResi = 0
@@ -379,27 +460,25 @@ export default function TrackerKlaimDashboard() {
         pengajuanResi++
         pengajuanNominal += d.nominal_claim
       }
-
       if (finalStat.includes('approved')) {
         approvedResi++
         approvedNominal += d.nominal_claim
       }
-
       if (finalStat.includes('reject') || finalStat.includes('cancel')) {
         cancelRejectResi++
         cancelRejectNominal += d.nominal_claim
       }
     })
 
-    return { 
-      totalKasus, 
-      totalKasusNominal, 
-      pengajuanResi, 
-      pengajuanNominal, 
-      approvedResi, 
-      approvedNominal, 
-      cancelRejectResi, 
-      cancelRejectNominal 
+    return {
+      totalKasus,
+      totalKasusNominal,
+      pengajuanResi,
+      pengajuanNominal,
+      approvedResi,
+      approvedNominal,
+      cancelRejectResi,
+      cancelRejectNominal
     }
   }, [filteredData])
 
@@ -410,23 +489,42 @@ export default function TrackerKlaimDashboard() {
     return filteredData.slice(start, start + itemsPerPage)
   }, [filteredData, currentPage, itemsPerPage])
 
-  useEffect(() => { setCurrentPage(1) }, [search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus])
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, filterAging])
 
   const handleSort = (key: 'aging' | 'nominal') => {
     setSortConfig(prev => ({
-      key, direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
     }))
   }
 
   const exportToCSV = () => {
     if (filteredData.length === 0) return
-    const headers = ['AWB', 'KLIEN', 'EKSPEDISI', 'KASUS', 'STATUS PROGRES', 'STATUS FINAL', 'TGL MASUK', 'TGL MUTASI', 'AGING (HARI)', 'NOMINAL CLAIM', 'KETERANGAN', 'PIC STAFF', 'BULAN']
+    const headers = [
+      'AWB', 'KLIEN', 'EKSPEDISI', 'KASUS', 'STATUS PROGRES', 'STATUS FINAL',
+      'TGL MASUK', 'TGL MUTASI', 'AGING (HARI)', 'NOMINAL CLAIM', 'KETERANGAN', 'PIC STAFF', 'BULAN'
+    ]
     const csvContent = [
       headers.join(','),
-      ...filteredData.map(d => [
-        d.no_awb, `"${d.client_name}"`, d.jenis_ekspedisi, d.kategori_case, d.update_status, d.final_status || '', 
-        d.date_added, d.tgl_mutasi || '', d.agingDays, d.nominal_claim, `"${d.keterangan.replace(/"/g, '""')}"`, d.user, d.bulan
-      ].join(','))
+      ...filteredData.map(d =>
+        [
+          d.no_awb,
+          `"${d.client_name}"`,
+          d.jenis_ekspedisi,
+          d.kategori_case,
+          d.update_status,
+          d.final_status || '',
+          d.date_added,
+          d.tgl_mutasi || '',
+          d.agingDays,
+          d.nominal_claim,
+          `"${d.keterangan.replace(/"/g, '""')}"`,
+          d.user,
+          d.bulan
+        ].join(',')
+      )
     ].join('\n')
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -439,12 +537,49 @@ export default function TrackerKlaimDashboard() {
     document.body.removeChild(link)
   }
 
+  // --- FILTER OPTIONS ---
   const finalStatusList = ['All', 'Open', 'Approved Claim', 'Cancel Claim', 'Reject Claim']
+  const agingList = ['All', '<7', '7-14', '>14', 'Closed']
+
+  const agingLabels: Record<string, string> = {
+    All: 'Aging',
+    '<7': '< 7 Hari',
+    '7-14': '7-14 Hari',
+    '>14': '> 14 Hari',
+    Closed: 'Closed'
+  }
+
+  const statusLabels: Record<string, string> = {
+    All: 'Final Status',
+    Open: 'Open',
+    'Approved Claim': 'Approved Claim',
+    'Cancel Claim': 'Cancel Claim',
+    'Reject Claim': 'Reject Claim'
+  }
+
+  // --- UI HELPERS ---
+  const hasActiveFilters =
+    search ||
+    filterBulan !== 'All' ||
+    filterEkspedisi !== 'All' ||
+    filterKategori !== 'All' ||
+    filterPic !== 'All' ||
+    filterStatus !== 'All' ||
+    filterAging !== 'All'
+
+  const clearAllFilters = () => {
+    setSearch('')
+    setFilterBulan('All')
+    setFilterEkspedisi('All')
+    setFilterKategori('All')
+    setFilterPic('All')
+    setFilterStatus('All')
+    setFilterAging('All')
+  }
 
   return (
     <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 bg-zinc-50/50 min-h-screen pb-20">
-      
-      {/* HEADER & SYNC */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900">Tracker & Monitoring Klaim</h1>
@@ -457,16 +592,31 @@ export default function TrackerKlaimDashboard() {
             {syncInfo.status === 'error' && <span className="w-2 h-2 rounded-full bg-rose-500"></span>}
             <span>Terakhir disinkron: {syncInfo.time || 'Belum pernah'}</span>
           </div>
-          <button onClick={fetchData} disabled={syncInfo.status === 'loading'} className="px-5 py-2.5 bg-zinc-900 hover:bg-black disabled:bg-zinc-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
-            <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 ${syncInfo.status === 'loading' ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          <button
+            onClick={fetchData}
+            disabled={syncInfo.status === 'loading'}
+            className="px-5 py-2.5 bg-zinc-900 hover:bg-black disabled:bg-zinc-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`w-4 h-4 ${syncInfo.status === 'loading' ? 'animate-spin' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
             </svg>
             Sinkronisasi Data
           </button>
         </div>
       </div>
 
-      {/* KPI SUMMARY CARDS */}
+      {/* KPI CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
         <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
           <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
@@ -501,60 +651,169 @@ export default function TrackerKlaimDashboard() {
         </div>
       </div>
 
-      {/* TOOLBAR & FILTERS */}
-      <div className="bg-white p-3 rounded-xl border border-zinc-200 shadow-sm space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* TOOLBAR & FILTERS - UI BARU */}
+      <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          {/* Search */}
           <div className="relative flex-1 max-w-md">
-            <input 
-              type="text" 
-              placeholder="Cari No. AWB, Nama Klien, Keterangan..." 
-              value={search} 
-              onChange={(e) => setSearch(e.target.value)} 
-              className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition" 
+            <input
+              type="text"
+              placeholder="Cari No. AWB, Nama Klien, Keterangan..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition"
             />
-            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm">🔍</span>
+            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm"></span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select value={filterBulan} onChange={e => setFilterBulan(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
+          {/* Filter Dropdowns */}
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+            {/* Bulan */}
+            <select
+              value={filterBulan}
+              onChange={e => setFilterBulan(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+            >
               {bulanList.map(b => (
                 <option key={b} value={b}>
-                  {b === 'All' ? 'Semua Bulan' : b === '(Tanpa Bulan)' ? '⚠️ Tanpa Bulan' : b}
+                  {b === 'All' ? 'Bulan' : b === '(Tanpa Bulan)' ? '️ Tanpa Bulan' : b}
                 </option>
               ))}
             </select>
-            <select value={filterEkspedisi} onChange={e => setFilterEkspedisi(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              {ekspedisiList.map(e => <option key={e} value={e}>{e === 'All' ? 'Semua Ekspedisi' : e}</option>)}
-            </select>
-            <select value={filterKategori} onChange={e => setFilterKategori(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              {kategoriList.map(k => <option key={k} value={k}>{k === 'All' ? 'Semua Kategori' : k}</option>)}
-            </select>
-            <select value={filterPic} onChange={e => setFilterPic(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              <option value="All">Semua PIC Staff</option>
-              {Object.entries(picWorkload).map(([pic, count]) => (
-                <option key={pic} value={pic}>{pic} • {count}</option>
+
+            {/* Ekspedisi */}
+            <select
+              value={filterEkspedisi}
+              onChange={e => setFilterEkspedisi(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+            >
+              {ekspedisiList.map(e => (
+                <option key={e} value={e}>
+                  {e === 'All' ? 'Ekspedisi' : e}
+                </option>
               ))}
             </select>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              {finalStatusList.map(s => <option key={s} value={s}>{s === 'All' ? 'Semua Status' : s}</option>)}
+
+            {/* Kategori */}
+            <select
+              value={filterKategori}
+              onChange={e => setFilterKategori(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+            >
+              {kategoriList.map(k => (
+                <option key={k} value={k}>
+                  {k === 'All' ? 'Kategori Case' : k}
+                </option>
+              ))}
             </select>
-            
-            <button onClick={exportToCSV} className="ml-2 px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5">
+
+            {/* PIC Staff */}
+            <select
+              value={filterPic}
+              onChange={e => setFilterPic(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+            >
+              <option value="All">PIC Staff</option>
+              {Object.entries(picWorkload)
+                .sort((a, b) => b[1] - a[1])
+                .map(([pic, count]) => (
+                  <option key={pic} value={pic}>
+                    {pic} · {count}
+                  </option>
+                ))}
+            </select>
+
+            {/* Final Status */}
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+            >
+              {finalStatusList.map(s => (
+                <option key={s} value={s}>
+                  {statusLabels[s]}
+                </option>
+              ))}
+            </select>
+
+            {/* Aging */}
+            <select
+              value={filterAging}
+              onChange={e => setFilterAging(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+            >
+              {agingList.map(a => (
+                <option key={a} value={a}>
+                  {agingLabels[a]}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={exportToCSV}
+              className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5"
+            >
               ⤓ Export CSV
             </button>
           </div>
         </div>
 
-        {/* ACTIVE CHIPS */}
-        {(search || filterBulan !== 'All' || filterEkspedisi !== 'All' || filterKategori !== 'All' || filterPic !== 'All' || filterStatus !== 'All') && (
+        {/* Active Filter Chips */}
+        {hasActiveFilters && (
           <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-zinc-100">
-            {filterBulan !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Bulan: {filterBulan} <button onClick={() => setFilterBulan('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
-            {filterEkspedisi !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Ekspedisi: {filterEkspedisi} <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
-            {filterKategori !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Kategori: {filterKategori} <button onClick={() => setFilterKategori('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
-            {filterPic !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">PIC: {filterPic} <button onClick={() => setFilterPic('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
-            {filterStatus !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Status: {filterStatus} <button onClick={() => setFilterStatus('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
-            
-            <button onClick={() => { setSearch(''); setFilterBulan('All'); setFilterEkspedisi('All'); setFilterKategori('All'); setFilterPic('All'); setFilterStatus('All'); }} className="text-[11px] font-bold text-zinc-500 hover:text-zinc-900 underline ml-2 cursor-pointer">
+            {filterBulan !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                Bulan: {filterBulan === '(Tanpa Bulan)' ? '⚠️ Tanpa Bulan' : filterBulan}
+                <button onClick={() => setFilterBulan('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
+                  ✕
+                </button>
+              </span>
+            )}
+            {filterEkspedisi !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                Ekspedisi: {filterEkspedisi}
+                <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
+                  ✕
+                </button>
+              </span>
+            )}
+            {filterKategori !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                Kategori: {filterKategori}
+                <button onClick={() => setFilterKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
+                  ✕
+                </button>
+              </span>
+            )}
+            {filterPic !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                PIC: {filterPic} · {picWorkload[filterPic] || 0}
+                <button onClick={() => setFilterPic('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
+                  ✕
+                </button>
+              </span>
+            )}
+            {filterStatus !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                Status: {statusLabels[filterStatus] || filterStatus}
+                <button onClick={() => setFilterStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
+                  
+                </button>
+              </span>
+            )}
+            {filterAging !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                Aging: {agingLabels[filterAging] || filterAging}
+                <button onClick={() => setFilterAging('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
+                  ✕
+                </button>
+              </span>
+            )}
+
+            <button
+              onClick={clearAllFilters}
+              className="text-[11px] font-bold text-zinc-500 hover:text-zinc-900 underline ml-2 cursor-pointer"
+            >
               Hapus semua filter
             </button>
           </div>
@@ -570,10 +829,16 @@ export default function TrackerKlaimDashboard() {
                 <th className="px-5 py-4 text-center">NO. AWB & KLIEN</th>
                 <th className="px-5 py-4 text-center">EKSPEDISI & KASUS</th>
                 <th className="px-5 py-4 text-center">STATUS PROGRES → FINAL</th>
-                <th className="px-5 py-4 text-center cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('aging')}>
+                <th
+                  className="px-5 py-4 text-center cursor-pointer hover:bg-zinc-100 transition"
+                  onClick={() => handleSort('aging')}
+                >
                   TIMELINE & AGING {sortConfig.key === 'aging' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-5 py-4 text-center cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('nominal')}>
+                <th
+                  className="px-5 py-4 text-center cursor-pointer hover:bg-zinc-100 transition"
+                  onClick={() => handleSort('nominal')}
+                >
                   NOMINAL CLAIM {sortConfig.key === 'nominal' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </th>
                 <th className="px-5 py-4 text-center">KETERANGAN</th>
@@ -582,11 +847,19 @@ export default function TrackerKlaimDashboard() {
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {loading ? (
-                <tr><td colSpan={7} className="px-5 py-16 text-center text-zinc-400 font-bold animate-pulse">Memuat Data dari Google Sheets...</td></tr>
+                <tr>
+                  <td colSpan={7} className="px-5 py-16 text-center text-zinc-400 font-bold animate-pulse">
+                    Memuat Data dari Google Sheets...
+                  </td>
+                </tr>
               ) : paginatedData.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-16 text-center text-zinc-500 font-medium">Tidak ada data klaim yang sesuai filter.</td></tr>
+                <tr>
+                  <td colSpan={7} className="px-5 py-16 text-center text-zinc-500 font-medium">
+                    Tidak ada data klaim yang sesuai filter.
+                  </td>
+                </tr>
               ) : (
-                paginatedData.map((item) => {
+                paginatedData.map(item => {
                   const { tags, sisaTeks } = parseTagKeterangan(item.keterangan || '')
                   const isHighValue = item.nominal_claim > 200000
                   const avatarInitial = item.user.substring(0, 2).toUpperCase()
@@ -599,18 +872,26 @@ export default function TrackerKlaimDashboard() {
                       </td>
                       <td className="px-5 py-4 text-center">
                         <div className="font-bold text-zinc-800">{item.jenis_ekspedisi}</div>
-                        <div className="text-rose-600 font-bold text-[10px] uppercase tracking-wide mt-1">{item.kategori_case}</div>
+                        <div className="text-rose-600 font-bold text-[10px] uppercase tracking-wide mt-1">
+                          {item.kategori_case}
+                        </div>
                       </td>
-                      
+
                       <td className="px-5 py-4 text-center">
                         <div className="inline-flex items-center justify-center gap-2">
                           <span className="text-zinc-500 font-medium">{item.update_status}</span>
                           <span className="text-zinc-300">→</span>
                           {item.final_status ? (
-                            <span className={`font-black ${
-                              item.final_status.toLowerCase().includes('approved') ? 'text-emerald-600' : 
-                              item.final_status.toLowerCase().includes('reject') || item.final_status.toLowerCase().includes('cancel') ? 'text-rose-600' : 'text-zinc-800'
-                            }`}>
+                            <span
+                              className={`font-black ${
+                                item.final_status.toLowerCase().includes('approved')
+                                  ? 'text-emerald-600'
+                                  : item.final_status.toLowerCase().includes('reject') ||
+                                    item.final_status.toLowerCase().includes('cancel')
+                                  ? 'text-rose-600'
+                                  : 'text-zinc-800'
+                              }`}
+                            >
                               {item.final_status}
                             </span>
                           ) : (
@@ -621,24 +902,52 @@ export default function TrackerKlaimDashboard() {
 
                       <td className="px-5 py-4 text-center font-mono text-[11px] space-y-1">
                         <div className="text-zinc-600 flex items-center justify-center gap-1">
-                          <span className="text-blue-500">📥</span> Masuk: {!isNaN(item.tglMasukObj.getTime()) ? item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'}) : '-'}
+                          <span className="text-blue-500">📥</span> Masuk:{' '}
+                          {!isNaN(item.tglMasukObj.getTime())
+                            ? item.tglMasukObj.toLocaleDateString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              })
+                            : '-'}
                         </div>
-                        {item.isFinal && item.tglMutasiObj && !isNaN(item.tglMutasiObj.getTime()) && (
+                        {item.isFinal && !item.isClosed && item.tglMutasiObj && !isNaN(item.tglMutasiObj.getTime()) && (
                           <div className="text-zinc-600 flex items-center justify-center gap-1">
-                            <span className="text-emerald-500">📤</span> Mutasi: {item.tglMutasiObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'})}
+                            <span className="text-emerald-500">📤</span> Mutasi:{' '}
+                            {item.tglMutasiObj.toLocaleDateString('id-ID', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
                           </div>
                         )}
-                        <div className={`inline-flex items-center justify-center gap-1 mt-1 font-extrabold ${
-                          item.isFinal ? 'text-emerald-600' :
-                          item.agingStatus === 'red' ? 'text-rose-600' : 
-                          item.agingStatus === 'yellow' ? 'text-amber-600' : 'text-emerald-600'
-                        }`}>
-                          {item.isFinal ? `✓ Selesai ${item.agingDays} Hari` : `⏳ Pengajuan Klaim (Hari Ke ${item.agingDays})`}
+                        <div
+                          className={`inline-flex items-center justify-center gap-1 mt-1 font-extrabold ${
+                            item.isClosed
+                              ? 'text-zinc-500'
+                              : item.isFinal
+                              ? 'text-emerald-600'
+                              : item.agingStatus === 'red'
+                              ? 'text-rose-600'
+                              : item.agingStatus === 'yellow'
+                              ? 'text-amber-600'
+                              : 'text-emerald-600'
+                          }`}
+                        >
+                          {item.isClosed
+                            ? '✓ Closed'
+                            : item.isFinal
+                            ? `✓ Selesai ${item.agingDays} Hari`
+                            : `⏳ Pengajuan Klaim (Hari Ke ${item.agingDays})`}
                         </div>
                       </td>
 
                       <td className="px-5 py-4 text-center">
-                        <div className={`font-mono ${isHighValue ? 'text-rose-600 font-black text-sm' : 'text-zinc-800 font-bold'}`}>
+                        <div
+                          className={`font-mono ${
+                            isHighValue ? 'text-rose-600 font-black text-sm' : 'text-zinc-800 font-bold'
+                          }`}
+                        >
                           {formatRupiah(item.nominal_claim)}
                         </div>
                       </td>
@@ -648,18 +957,29 @@ export default function TrackerKlaimDashboard() {
                           {tags.length > 0 && (
                             <div className="flex flex-wrap justify-center gap-1">
                               {tags.map((t, i) => (
-                                <span key={i} className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold">{t}</span>
+                                <span
+                                  key={i}
+                                  className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold"
+                                >
+                                  {t}
+                                </span>
                               ))}
                             </div>
                           )}
-                          {sisaTeks && <span className="text-zinc-600 text-[11px] leading-snug">{sisaTeks}</span>}
+                          {sisaTeks && (
+                            <span className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                              {sisaTeks}
+                            </span>
+                          )}
                           {!tags.length && !sisaTeks && <span className="text-zinc-400">—</span>}
                         </div>
                       </td>
 
                       <td className="px-5 py-4 text-center">
                         <div className="inline-flex items-center justify-center gap-2 px-2.5 py-1 bg-white border border-zinc-200 rounded-full shadow-2xs mx-auto">
-                          <span className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-[9px] font-black">{avatarInitial}</span>
+                          <span className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-[9px] font-black">
+                            {avatarInitial}
+                          </span>
                           <span className="font-bold text-zinc-800">{item.user}</span>
                         </div>
                       </td>
@@ -675,9 +995,16 @@ export default function TrackerKlaimDashboard() {
         {filteredData.length > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-5 py-3 border-t border-zinc-200 bg-white text-[11px]">
             <div className="text-zinc-500 font-medium flex items-center gap-2">
-              Menampilkan {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredData.length)} dari <span className="font-bold text-zinc-900">{filteredData.length.toLocaleString('id-ID')} kasus</span>
-              
-              <select value={itemsPerPage} onChange={(e) => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1)}} className="ml-2 bg-zinc-50 border border-zinc-200 rounded px-2 py-1 focus:outline-none cursor-pointer">
+              Menampilkan {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredData.length)}{' '}
+              dari <span className="font-bold text-zinc-900">{filteredData.length.toLocaleString('id-ID')} kasus</span>
+              <select
+                value={itemsPerPage}
+                onChange={e => {
+                  setItemsPerPage(Number(e.target.value))
+                  setCurrentPage(1)
+                }}
+                className="ml-2 bg-zinc-50 border border-zinc-200 rounded px-2 py-1 focus:outline-none cursor-pointer"
+              >
                 <option value={25}>25 / halaman</option>
                 <option value={50}>50 / halaman</option>
                 <option value={100}>100 / halaman</option>
@@ -685,35 +1012,53 @@ export default function TrackerKlaimDashboard() {
             </div>
 
             <div className="flex items-center gap-1.5">
-              <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer"
+              >
                 &lt; Sebelumnya
               </button>
-              
+
               <div className="flex items-center gap-1 px-2">
                 {[...Array(Math.min(3, totalPages))].map((_, i) => {
                   const pageNum = i + 1
                   return (
-                    <button key={pageNum} onClick={() => setCurrentPage(pageNum)} className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold ${currentPage === pageNum ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}>
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold ${
+                        currentPage === pageNum ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                      }`}
+                    >
                       {pageNum}
                     </button>
                   )
                 })}
                 {totalPages > 3 && <span className="text-zinc-400 px-1">...</span>}
                 {totalPages > 3 && (
-                  <button onClick={() => setCurrentPage(totalPages)} className={`w-8 h-6 flex items-center justify-center rounded text-[10px] font-bold ${currentPage === totalPages ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    className={`w-8 h-6 flex items-center justify-center rounded text-[10px] font-bold ${
+                      currentPage === totalPages ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                    }`}
+                  >
                     {totalPages}
                   </button>
                 )}
               </div>
 
-              <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer">
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer"
+              >
                 Berikutnya &gt;
               </button>
             </div>
           </div>
         )}
       </div>
-
     </main>
   )
 }
