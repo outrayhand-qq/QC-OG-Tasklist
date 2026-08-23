@@ -63,18 +63,12 @@ export default function TeamLeaderConsole() {
   const [selectedPicFilter, setSelectedPicFilter] = useState<string>('All')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // State Fitur High, Medium, & Low Priority
   const [activeBadgeFilter, setActiveBadgeFilter] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'deadline' | 'priority' | 'updated'>('deadline')
   const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({})
-  
-  // State Low Priority #10 (Quick Add Modal)
-  const [quickAddModalTaskId, setQuickAddModalTaskId] = useState<string | null>(null)
-  const [quickAddText, setQuickAddText] = useState<string>('')
 
-  // State Pagination (Medium Priority #8)
   const [currentPage, setCurrentPage] = useState<number>(1)
-  const itemsPerPage = 15
+  const itemsPerPage = 10
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -193,8 +187,6 @@ export default function TeamLeaderConsole() {
       )
       const inputEl = document.getElementById(`new-feedback-${taskId}`) as HTMLInputElement | null
       if (inputEl) inputEl.value = ''
-      setQuickAddModalTaskId(null)
-      setQuickAddText('')
     } else {
       alert('Gagal menambah tindak lanjut: ' + error.message)
     }
@@ -407,7 +399,6 @@ export default function TeamLeaderConsole() {
     return result
   }, [scopedTasks, selectedKategori, selectedStatus, selectedPriority, searchQuery, activeBadgeFilter, sortBy])
 
-  // Low Priority #11: Custom Export CSV sesuai filter aktif & penamaan dinamis
   const handleExportDynamicCSV = () => {
     const filterContext = selectedKategori !== 'All' ? selectedKategori.replace(/\s+/g, '_') : 'All_Cat'
     const dateStr = new Date().toISOString().split('T')[0]
@@ -512,141 +503,84 @@ export default function TeamLeaderConsole() {
   }
 
   const isSuperAdmin = userRole === 'superadmin'
-
-  const displayRoleLabel = isSuperAdmin
-    ? 'SUPERADMIN'
-    : userRole === 'tlqc'
-    ? 'TL QC'
-    : userRole === 'tlog'
-    ? 'TL OUTGOING'
-    : userRole.toUpperCase()
+  const displayRoleLabel = isSuperAdmin ? 'SUPERADMIN' : userRole === 'tlqc' ? 'TL QC' : userRole === 'tlog' ? 'TL OUTGOING' : userRole.toUpperCase()
 
   return (
     <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 pb-20">
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-2">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight text-zinc-900">
-            {isSuperAdmin
-              ? 'Team Leader Management Dashboard'
-              : userRole === 'tlqc'
-              ? 'Tasklist Operasional TL QC'
-              : 'Tasklist Operasional TL Outgoing'}
+            {isSuperAdmin ? 'Team Leader Management Dashboard' : userRole === 'tlqc' ? 'Tasklist Operasional TL QC' : 'Tasklist Operasional TL Outgoing'}
           </h1>
-          <p className="text-xs text-zinc-500 mt-1">
-            Daily Tracker Log Activity & Tasklist Performance.
-          </p>
+          <p className="text-xs text-zinc-500 mt-1">Daily Tracker Log Activity & Tasklist Performance.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-            <button
-              onClick={() => setActiveBadgeFilter(null)}
-              className={`px-3 py-1 rounded border transition cursor-pointer ${!activeBadgeFilter ? 'bg-zinc-900 text-white border-zinc-900 font-bold' : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'}`}
-            >
-              Total Task: <strong className={!activeBadgeFilter ? 'text-white' : 'text-zinc-900'}>{stats.total}</strong>
+            <button onClick={() => setActiveBadgeFilter(null)} className={`px-3 py-1 rounded border transition cursor-pointer ${!activeBadgeFilter ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-700'}`}>
+              Total Task: <strong>{stats.total}</strong>
             </button>
-            <button
-              onClick={() => toggleBadgeFilter('Open')}
-              className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Open' ? 'bg-zinc-900 text-white border-zinc-900 font-bold' : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'}`}
-            >
+            <button onClick={() => toggleBadgeFilter('Open')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Open' ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-700'}`}>
               Open: <strong>{stats.open}</strong>
             </button>
-            <button
-              onClick={() => toggleBadgeFilter('Progress')}
-              className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Progress' ? 'bg-sky-600 text-white border-sky-700 font-bold' : 'bg-sky-50 text-sky-700 border-sky-200/80 hover:bg-sky-100'}`}
-            >
+            <button onClick={() => toggleBadgeFilter('Progress')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Progress' ? 'bg-sky-600 text-white font-bold' : 'bg-sky-50 text-sky-700'}`}>
               Progress: <strong>{stats.progress}</strong>
             </button>
-            <button
-              onClick={() => toggleBadgeFilter('Closed')}
-              className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Closed' ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100'}`}
-            >
+            <button onClick={() => toggleBadgeFilter('Closed')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Closed' ? 'bg-emerald-600 text-white font-bold' : 'bg-emerald-50 text-emerald-700'}`}>
               Closed: <strong>{stats.closed}</strong>
             </button>
-            <button
-              onClick={() => toggleBadgeFilter('Urgent')}
-              className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Urgent' ? 'bg-rose-600 text-white border-rose-700 font-bold' : 'bg-rose-50 text-rose-700 border-rose-200/80 hover:bg-rose-100'}`}
-            >
+            <button onClick={() => toggleBadgeFilter('Urgent')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Urgent' ? 'bg-rose-600 text-white font-bold' : 'bg-rose-50 text-rose-700'}`}>
               Urgent: <strong>{stats.urgent}</strong>
             </button>
-            <button
-              onClick={() => toggleBadgeFilter('Overdue')}
-              className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Overdue' ? 'bg-amber-600 text-white border-amber-700 font-bold' : 'bg-amber-50 text-amber-800 border-amber-200/80 hover:bg-amber-100'}`}
-            >
+            <button onClick={() => toggleBadgeFilter('Overdue')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Overdue' ? 'bg-amber-600 text-white font-bold' : 'bg-amber-50 text-amber-800'}`}>
               Overdue: <strong>{stats.overdue}</strong>
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportDynamicCSV}
-              className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>⤓</span>
-              <span>Export CSV (Filter Aktif)</span>
+            <button onClick={handleExportDynamicCSV} className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition cursor-pointer">
+              ⤓ Export CSV
             </button>
-
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>+</span>
-              <span>Tambah Task</span>
+            <button onClick={() => setIsCreateModalOpen(true)} className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition cursor-pointer">
+              + Tambah Task
             </button>
-
-            <button
-              onClick={fetchTasks}
-              className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition cursor-pointer"
-            >
+            <button onClick={fetchTasks} className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition cursor-pointer">
               ↻
             </button>
           </div>
         </div>
       </div>
 
+      {(stats.urgent > 0 || stats.overdue > 0) && (
+        <div className="bg-zinc-900 text-amber-300 px-4 py-3 rounded-lg text-xs font-bold flex items-center justify-between shadow-md border-l-4 border-amber-400">
+          <div className="flex items-center gap-2">
+            <span>🔥</span>
+            <span>Perhatian: Ada {stats.urgent} task urgent dan {stats.overdue} task overdue yang memerlukan tindakan segera!</span>
+          </div>
+          <button onClick={() => setActiveBadgeFilter('Urgent')} className="text-white underline text-[11px] hover:text-amber-200 cursor-pointer">
+            Filter Task Terkait
+          </button>
+        </div>
+      )}
+
       {isSuperAdmin && (
         <div className="flex items-center gap-1">
           {(['All', 'TL QC', 'TL OG'] as const).map((div) => (
-            <button
-              key={div}
-              onClick={() => setSelectedDivisi(div)}
-              className={`px-4 py-1.5 text-xs font-bold rounded transition cursor-pointer ${
-                selectedDivisi === div
-                  ? 'bg-white text-zinc-900 shadow-2xs border border-zinc-200/90'
-                  : 'text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
+            <button key={div} onClick={() => setSelectedDivisi(div)} className={`px-4 py-1.5 text-xs font-bold rounded transition cursor-pointer ${selectedDivisi === div ? 'bg-white text-zinc-900 shadow-2xs border border-zinc-200' : 'text-zinc-500'}`}>
               {div === 'All' ? 'Semua TL' : div}
             </button>
           ))}
         </div>
       )}
 
-      {/* Toolbar Filter & Chip Kombinasi Aktif */}
       <div className="bg-white p-3 rounded-lg border border-zinc-200/80 shadow-2xs space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-1 overflow-x-auto p-0.5 text-xs font-medium scrollbar-none">
-            <button
-              onClick={() => setSelectedKategori('All')}
-              className={`px-3 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${
-                selectedKategori === 'All'
-                  ? 'bg-zinc-100 text-zinc-900 font-bold border border-zinc-200/80'
-                  : 'text-zinc-600 hover:text-zinc-900'
-              }`}
-            >
+            <button onClick={() => setSelectedKategori('All')} className={`px-3 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${selectedKategori === 'All' ? 'bg-zinc-100 text-zinc-900 font-bold border border-zinc-200' : 'text-zinc-600'}`}>
               Semua Kategori
             </button>
             {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedKategori(cat)}
-                className={`px-3 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${
-                  selectedKategori === cat
-                    ? 'bg-zinc-100 text-zinc-900 font-bold border border-zinc-200/80'
-                    : 'text-zinc-600 hover:text-zinc-900'
-                }`}
-              >
+              <button key={cat} onClick={() => setSelectedKategori(cat)} className={`px-3 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${selectedKategori === cat ? 'bg-zinc-100 text-zinc-900 font-bold border border-zinc-200' : 'text-zinc-600'}`}>
                 {cat}
               </button>
             ))}
@@ -654,55 +588,25 @@ export default function TeamLeaderConsole() {
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="relative">
-              <input
-                type="text"
-                placeholder="Cari task, PIC..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full sm:w-52 pl-7 pr-3 py-1.5 bg-zinc-50 border border-zinc-200/90 rounded text-xs placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-zinc-400 transition"
-              />
+              <input type="text" placeholder="Cari task, PIC..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full sm:w-52 pl-7 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-xs focus:outline-none focus:bg-white" />
               <span className="absolute left-2.5 top-1.5 text-zinc-400 text-xs">🔍</span>
             </div>
-
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-zinc-50 border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-bold text-zinc-800 focus:outline-none cursor-pointer"
-            >
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="bg-zinc-50 border border-zinc-200 rounded px-2.5 py-1.5 text-xs font-bold text-zinc-800 focus:outline-none cursor-pointer">
               <option value="deadline">Urut: Deadline terdekat</option>
               <option value="priority">Urut: Priority tertinggi</option>
               <option value="updated">Urut: Terakhir diupdate</option>
             </select>
-
             {isSuperAdmin && (
-              <select
-                value={selectedPicFilter}
-                onChange={(e) => setSelectedPicFilter(e.target.value)}
-                className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
-              >
+              <select value={selectedPicFilter} onChange={(e) => setSelectedPicFilter(e.target.value)} className="bg-white border border-zinc-200 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer">
                 <option value="All">Semua User</option>
-                {ALL_PICS.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
+                {ALL_PICS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
-
-            <select
-              value={selectedPriority}
-              onChange={(e) => setSelectedPriority(e.target.value)}
-              className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
-            >
+            <select value={selectedPriority} onChange={(e) => setSelectedPriority(e.target.value)} className="bg-white border border-zinc-200 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer">
               <option value="All">Semua Priority</option>
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
+              {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
-
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
-            >
+            <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="bg-white border border-zinc-200 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer">
               <option value="All">Semua Status</option>
               <option value="Open">Open</option>
               <option value="On Progress">On Progress</option>
@@ -711,252 +615,110 @@ export default function TeamLeaderConsole() {
           </div>
         </div>
 
-        {/* CHIP FILTER AKTIF */}
         {(selectedKategori !== 'All' || selectedPriority !== 'All' || selectedStatus !== 'All' || selectedPicFilter !== 'All' || searchQuery) && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100 text-[11px]">
             <span className="text-zinc-400 font-bold uppercase tracking-wider text-[10px]">Filter Aktif:</span>
-            {searchQuery && (
-              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
-                Pencarian: "{searchQuery}" <button onClick={() => setSearchQuery('')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
-              </span>
-            )}
-            {selectedKategori !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
-                Kategori: {selectedKategori} <button onClick={() => setSelectedKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
-              </span>
-            )}
-            {selectedPriority !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
-                Priority: {selectedPriority} <button onClick={() => setSelectedPriority('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
-              </span>
-            )}
-            {selectedStatus !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
-                Status: {selectedStatus} <button onClick={() => setSelectedStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
-              </span>
-            )}
-            {selectedPicFilter !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
-                User: {selectedPicFilter} <button onClick={() => setSelectedPicFilter('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
-              </span>
-            )}
-            <button 
-              onClick={() => { setSelectedKategori('All'); setSelectedPriority('All'); setSelectedStatus('All'); setSelectedPicFilter('All'); setSearchQuery(''); }}
-              className="text-sky-600 hover:underline font-bold ml-1"
-            >
-              Hapus semua filter
-            </button>
+            {searchQuery && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Pencarian: "{searchQuery}" <button onClick={() => setSearchQuery('')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
+            {selectedKategori !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Kategori: {selectedKategori} <button onClick={() => setSelectedKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
+            {selectedPriority !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Priority: {selectedPriority} <button onClick={() => setSelectedPriority('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
+            {selectedStatus !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Status: {selectedStatus} <button onClick={() => setSelectedStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
+            {selectedPicFilter !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">User: {selectedPicFilter} <button onClick={() => setSelectedPicFilter('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
+            <button onClick={() => { setSelectedKategori('All'); setSelectedPriority('All'); setSelectedStatus('All'); setSelectedPicFilter('All'); setSearchQuery(''); }} className="text-sky-600 hover:underline font-bold ml-1">Hapus semua filter</button>
           </div>
         )}
       </div>
 
-      {/* Tabel Data */}
-      <div className="bg-white border border-zinc-200/90 rounded-lg shadow-2xs overflow-hidden">
+      <div className="space-y-4">
         {loading ? (
-          <div className="py-20 text-center text-xs text-zinc-400 font-bold uppercase tracking-widest animate-pulse">
-            Memuat Konsol Tasklist...
+          <div className="py-20 text-center text-xs text-zinc-400 font-bold uppercase tracking-widest bg-white rounded-xl border border-zinc-200 animate-pulse">
+            Memuat Daftar Task...
           </div>
         ) : paginatedTasks.length === 0 ? (
-          <div className="py-20 text-center text-xs text-zinc-500 font-medium space-y-1">
+          <div className="py-20 text-center text-xs text-zinc-500 font-medium bg-white rounded-xl border border-zinc-200 space-y-1">
             <p className="font-bold text-zinc-700">Tidak ada task yang ditemukan</p>
             <p className="text-zinc-400 text-[11px]">Cobalah mengubah filter pencarian atau buat task baru.</p>
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-zinc-200/90 bg-zinc-50/80 text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">
-                <th className="py-3 px-4 w-5/12">DESKRIPSI TUGAS</th>
-                <th className="py-3 px-4">KATEGORI PILAR</th>
-                <th className="py-3 px-4">DIVISI & PIC</th>
-                <th className="py-3 px-4">PRIORITY</th>
-                <th className="py-3 px-4">STATUS</th>
-                <th className="py-3 px-4 text-right">AKSI</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 text-xs text-zinc-800">
-              {paginatedTasks.map((task) => {
-                const isQC = task.pic_assignment?.toLowerCase().includes('qc')
-                const currentStatus = task.final_status || task.status || 'Open'
-                const isClosed = currentStatus === 'Closed'
-                const durationResult = isClosed ? calculateDuration(task.created_at, task.waktu_close) : null
-                const deadlineAlert = getDeadlineStatusInfo(task.deadline, task.status, task.final_status)
-                
-                const urgencyStyle = getTaskUrgencyStyle(task)
+          paginatedTasks.map((task) => {
+            const isQC = task.pic_assignment?.toLowerCase().includes('qc')
+            const currentStatus = task.final_status || task.status || 'Open'
+            const isClosed = currentStatus === 'Closed'
+            const durationResult = isClosed ? calculateDuration(task.created_at, task.waktu_close) : null
+            const deadlineAlert = getDeadlineStatusInfo(task.deadline, task.status, task.final_status)
+            const urgencyStyle = getTaskUrgencyStyle(task)
 
-                let barPercent = 0
-                let barColor = 'bg-emerald-400'
-                if (!isClosed && task.deadline) {
-                  const diffHours = (new Date(task.deadline).getTime() - Date.now()) / (1000 * 60 * 60)
-                  if (diffHours < 0) { barPercent = 100; barColor = 'bg-rose-500' }
-                  else if (diffHours <= 24) { barPercent = 100 - ((diffHours / 24) * 100); barColor = 'bg-amber-400' }
-                  else { barPercent = 30; barColor = 'bg-emerald-400' }
-                }
+            let barPercent = 0
+            let barColor = 'bg-emerald-400'
+            if (!isClosed && task.deadline) {
+              const diffHours = (new Date(task.deadline).getTime() - Date.now()) / (1000 * 60 * 60)
+              if (diffHours < 0) { barPercent = 100; barColor = 'bg-rose-500' }
+              else if (diffHours <= 24) { barPercent = 100 - ((diffHours / 24) * 100); barColor = 'bg-amber-400' }
+              else { barPercent = 30; barColor = 'bg-emerald-400' }
+            }
 
-                const feedbackLines = task.feedback ? task.feedback.split('\n').filter(Boolean) : []
-                const isExpanded = expandedHistory[task.id]
-                const displayedLines = isExpanded ? feedbackLines : feedbackLines.slice(-2)
+            const feedbackLines = task.feedback ? task.feedback.split('\n').filter(Boolean) : []
+            const isExpanded = expandedHistory[task.id]
+            const displayedLines = isExpanded ? feedbackLines : feedbackLines.slice(-2)
 
-                return (
-                  <tr key={task.id} className={`hover:bg-zinc-50/60 transition group border-l-4 ${urgencyStyle.borderColor}`}>
-                    
-                    {/* DESKRIPSI TUGAS & KETERANGAN DEADLINE */}
-                    <td className="py-3.5 px-4 align-top space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
-                            {task.detail_task}
-                          </span>
-                          <button
-                            onClick={() => openEditModal(task)}
-                            title="Edit Task"
-                            className="inline-flex items-center justify-center p-1 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 rounded transition shrink-0 cursor-pointer shadow-2xs"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
-                        </div>
-
-                        {/* Low Priority #10: Quick-Add Tombol Instan */}
-                        <button
-                          onClick={() => setQuickAddModalTaskId(task.id)}
-                          className="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded text-[10px] font-bold transition cursor-pointer shadow-2xs"
-                        >
-                          + Quick Log
+            return (
+              <div key={task.id} className={`bg-white rounded-xl shadow-xs border border-zinc-200/90 overflow-hidden border-l-4 ${urgencyStyle.borderColor} transition hover:shadow-md`}>
+                <div className="p-5 space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-zinc-900 text-sm leading-snug">{task.detail_task}</h3>
+                        <button onClick={() => openEditModal(task)} title="Edit Task" className="p-1 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 rounded border border-zinc-200 transition cursor-pointer">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
                         </button>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono">
                         {task.deadline && (
-                          <div className="text-zinc-500 flex items-center gap-1 font-semibold">
-                            <span>🕒</span>
-                            <span>Deadline: {formatDeadlineDisplay(task.deadline)}</span>
-                          </div>
+                          <span className="text-zinc-500 font-semibold flex items-center gap-1">
+                            <span>🕒</span> Deadline: {formatDeadlineDisplay(task.deadline)}
+                          </span>
                         )}
-
                         {deadlineAlert && !isClosed && (
-                          <span className={`px-2 py-0.5 rounded font-black tracking-wide ${deadlineAlert.type === 'overdue' ? 'bg-rose-100 border border-rose-300 text-rose-800 animate-pulse' : 'bg-amber-100 border border-amber-300 text-amber-900'}`}>
+                          <span className={`px-2 py-0.5 rounded font-black tracking-wide ${deadlineAlert.type === 'overdue' ? 'bg-rose-100 text-rose-800 animate-pulse' : 'bg-amber-100 text-amber-900'}`}>
                             {deadlineAlert.text}
                           </span>
                         )}
-
                         {!isClosed && task.deadline && (
-                          <div className="w-20 h-1.5 bg-zinc-100 rounded-full overflow-hidden inline-block" title="Progress waktu menuju deadline">
+                          <div className="w-24 h-1.5 bg-zinc-100 rounded-full overflow-hidden inline-block">
                             <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${barPercent}%` }}></div>
                           </div>
                         )}
-
                         {isClosed && task.waktu_close && (
-                          <div className="flex items-center gap-1 text-emerald-800 font-bold">
-                            <span>✅</span>
-                            <span>Closed: {formatDeadlineDisplay(task.waktu_close)}</span>
-                            {durationResult && (
-                              <span className="bg-emerald-100 border border-emerald-300 text-emerald-900 px-2 py-0.5 rounded font-black ml-1">
-                                Selesai dalam {durationResult}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-2 space-y-1.5">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                            💬 History Feedback / Tindak Lanjut:
+                          <span className="text-emerald-800 font-bold flex items-center gap-1">
+                            ✅ Closed: {formatDeadlineDisplay(task.waktu_close)} {durationResult && `(Selesai dalam ${durationResult})`}
                           </span>
-                          {feedbackLines.length > 2 && (
-                            <button
-                              onClick={() => setExpandedHistory(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
-                              className="text-[11px] text-sky-600 font-bold hover:underline cursor-pointer"
-                            >
-                              {isExpanded ? 'Tutup' : `Lihat semua (${feedbackLines.length})`}
-                            </button>
-                          )}
-                        </div>
-
-                        {feedbackLines.length > 0 && (
-                          <div className="p-2 rounded bg-zinc-50 border-l-2 border-zinc-900 text-[11px] text-zinc-700 font-mono space-y-1 max-h-32 overflow-y-auto">
-                            {displayedLines.map((line, idx) => (
-                              <div key={idx} className="leading-snug">
-                                {line}
-                              </div>
-                            ))}
-                          </div>
                         )}
-
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            id={`new-feedback-${task.id}`}
-                            type="text"
-                            placeholder="Tambah tindak lanjut berikutnya..."
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                handleAddFeedbackLog(task.id, e.currentTarget.value)
-                              }
-                            }}
-                            className="flex-1 px-2.5 py-1 text-xs bg-white border border-zinc-200 rounded focus:border-zinc-900 focus:outline-none placeholder:text-zinc-400 transition"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const el = document.getElementById(`new-feedback-${task.id}`) as HTMLInputElement | null
-                              if (el) handleAddFeedbackLog(task.id, el.value)
-                            }}
-                            className="px-2.5 py-1 bg-zinc-900 hover:bg-black text-white text-[10px] font-bold rounded shadow-2xs transition cursor-pointer shrink-0"
-                          >
-                            + Tambah
-                          </button>
-                        </div>
                       </div>
+                    </div>
 
-                      {/* Low Priority #9: Tampilan Lampiran / Link Lebih Menonjol */}
-                      {task.bukti_url && (
-                        <div className="pt-1">
-                          <a
-                            href={task.bukti_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200/80 transition shadow-2xs"
-                          >
-                            <span>🔗</span>
-                            <span>Buka Lampiran Link</span>
-                          </a>
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle">
-                      <span className="inline-block px-2.5 py-1 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200/80">
+                    <div className="flex flex-wrap items-center gap-2 text-xs shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-zinc-100">
+                      <span className="px-2.5 py-1 rounded bg-zinc-100 text-zinc-700 font-medium border border-zinc-200">
                         {task.kategori || 'Daily Task Operasional'}
                       </span>
-                    </td>
 
-                    <td className="py-3.5 px-4 align-middle">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${isQC ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-zinc-100 text-zinc-700 border border-zinc-200'}`}>
+                      <div className="flex items-center gap-1 px-2.5 py-1 bg-zinc-50 border border-zinc-200 rounded text-zinc-800 font-medium">
+                        <span className={`px-1 py-0.5 rounded text-[9px] font-bold uppercase ${isQC ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-200 text-zinc-700'}`}>
                           {isQC ? 'QC' : 'TL'}
                         </span>
-                        {task.pic_assignment ? task.pic_assignment.split(',').map((p, idx) => (
-                          <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[11px] font-medium text-zinc-800">
-                            {p.trim()}
-                          </span>
-                        )) : '-'}
+                        <span>{task.pic_assignment || '-'}</span>
                       </div>
-                    </td>
 
-                    <td className="py-3.5 px-4 align-middle">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/70">
+                      <span className="px-2.5 py-1 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200/70 flex items-center gap-1">
                         <span className={`w-1.5 h-1.5 rounded-full ${task.priority === 'Urgent' ? 'bg-rose-500' : 'bg-amber-500'}`} />
                         {task.priority || 'Medium'}
                       </span>
-                    </td>
 
-                    <td className="py-3.5 px-4 align-middle">
                       <select
                         value={currentStatus}
                         onChange={(e) => updateStatus(task.id, e.target.value)}
-                        className={`text-xs font-bold rounded-lg px-2.5 py-1.5 border transition cursor-pointer appearance-none ${
+                        className={`font-bold rounded-lg px-3 py-1.5 border transition cursor-pointer appearance-none ${
                           currentStatus === 'Closed' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
                           currentStatus === 'On Progress' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-zinc-100 text-zinc-700 border-zinc-200'
                         }`}
@@ -965,98 +727,100 @@ export default function TeamLeaderConsole() {
                         <option value="On Progress">On Progress</option>
                         <option value="Closed">Closed</option>
                       </select>
-                    </td>
+                    </div>
+                  </div>
 
-                    <td className="py-3.5 px-4 align-middle text-right">
+                  <div className="border-t border-zinc-100 pt-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                        💬 History Feedback / Tindak Lanjut:
+                      </span>
+                      {feedbackLines.length > 2 && (
+                        <button onClick={() => setExpandedHistory(prev => ({ ...prev, [task.id]: !prev[task.id] }))} className="text-[11px] text-sky-600 font-bold hover:underline cursor-pointer">
+                          {isExpanded ? 'Tutup' : `Lihat semua (${feedbackLines.length})`}
+                        </button>
+                      )}
+                    </div>
+
+                    {feedbackLines.length > 0 && (
+                      <div className="p-2.5 rounded-lg bg-zinc-50 border-l-2 border-zinc-900 text-[11px] text-zinc-700 font-mono space-y-1 max-h-32 overflow-y-auto">
+                        {displayedLines.map((line, idx) => (
+                          <div key={idx} className="leading-snug">{line}</div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        id={`new-feedback-${task.id}`}
+                        type="text"
+                        placeholder="Tambah tindak lanjut berikutnya..."
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleAddFeedbackLog(task.id, e.currentTarget.value)
+                          }
+                        }}
+                        className="flex-1 px-3 py-2 text-xs bg-white border border-zinc-200 rounded-lg focus:border-zinc-900 focus:outline-none placeholder:text-zinc-400 transition"
+                      />
                       <button
-                        onClick={() => openEditModal(task)}
-                        className="px-2.5 py-1 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 rounded text-xs font-semibold shadow-2xs transition cursor-pointer"
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById(`new-feedback-${task.id}`) as HTMLInputElement | null
+                          if (el) handleAddFeedbackLog(task.id, el.value)
+                        }}
+                        className="px-4 py-2 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer shrink-0"
                       >
-                        Edit
+                        + Tambah
                       </button>
-                    </td>
+                    </div>
 
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    {task.bukti_url && (
+                      <div className="pt-1">
+                        <a href={task.bukti_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 transition shadow-2xs">
+                          <span>🔗</span> Buka Lampiran Link
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              </div>
+            )
+          })
         )}
       </div>
 
-      {/* PAGINATION CONTROLS */}
       {filteredTasks.length > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border border-zinc-200 rounded-lg text-xs shadow-sm">
           <div className="text-zinc-500 font-medium">
-            Menampilkan <span className="font-bold text-zinc-800">{(currentPage - 1) * itemsPerPage + 1}</span> sampai <span className="font-bold text-zinc-800">{Math.min(currentPage * itemsPerPage, filteredTasks.length)}</span> dari <span className="font-bold text-zinc-800">{filteredTasks.length}</span> task
+            Menampilkan <span className="font-bold text-zinc-850">{(currentPage - 1) * itemsPerPage + 1}</span> sampai <span className="font-bold text-zinc-850">{Math.min(currentPage * itemsPerPage, filteredTasks.length)}</span> dari <span className="font-bold text-zinc-850">{filteredTasks.length}</span> task
           </div>
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
-              disabled={currentPage === 1} 
-              className="px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-zinc-700 font-bold disabled:opacity-40 hover:bg-zinc-100 transition cursor-pointer"
-            >
+            <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-zinc-700 font-bold disabled:opacity-40 hover:bg-zinc-100 transition cursor-pointer">
               Sebelumnya
             </button>
             <span className="px-2 font-bold text-zinc-700">Halaman {currentPage} dari {totalPages}</span>
-            <button 
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
-              disabled={currentPage === totalPages} 
-              className="px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-zinc-700 font-bold disabled:opacity-40 hover:bg-zinc-100 transition cursor-pointer"
-            >
+            <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-zinc-700 font-bold disabled:opacity-40 hover:bg-zinc-100 transition cursor-pointer">
               Selanjutnya
             </button>
           </div>
         </div>
       )}
 
-      {/* Footer / Panel Pojok Bawah */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xs border-t border-zinc-200/80 px-4 py-2 flex items-center justify-between text-xs shadow-md z-40">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
-          <span className="text-zinc-700 font-medium">
-            {userEmail}
-          </span>
-          <span className="px-2.5 py-0.5 bg-zinc-900 text-white rounded text-[10px] font-extrabold tracking-wider uppercase">
-            {displayRoleLabel}
-          </span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+          <span className="text-zinc-700 font-medium">{userEmail}</span>
+          <span className="px-2.5 py-0.5 bg-zinc-900 text-white rounded text-[10px] font-extrabold tracking-wider uppercase">{displayRoleLabel}</span>
         </div>
-        <button
-          onClick={handleLogout}
-          title="Keluar Sistem"
-          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded border border-rose-200 transition cursor-pointer flex items-center justify-center"
-        >
+        <button onClick={handleLogout} title="Keluar Sistem" className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded border border-rose-200 transition cursor-pointer flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
         </button>
       </div>
 
-      {/* Modal Quick Add Tindak Lanjut (Low Priority #10) */}
-      {quickAddModalTaskId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white border border-zinc-200 w-full max-w-md rounded-xl shadow-2xl p-5 space-y-4 text-xs">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-sm text-zinc-900">Tambah Tindak Lanjut Cepat</h3>
-              <button onClick={() => setQuickAddModalTaskId(null)} className="text-zinc-400 hover:text-black font-bold p-1 cursor-pointer">✕</button>
-            </div>
-            <textarea
-              autoFocus
-              rows={3}
-              value={quickAddText}
-              onChange={(e) => setQuickAddText(e.target.value)}
-              placeholder="Tulis update tindak lanjut di sini..."
-              className="w-full p-3 border border-zinc-300 rounded-lg focus:outline-none focus:border-black resize-none"
-            />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setQuickAddModalTaskId(null)} className="px-4 py-2 font-semibold text-zinc-600 hover:text-black">Batal</button>
-              <button onClick={() => handleAddFeedbackLog(quickAddModalTaskId, quickAddText)} className="px-4 py-2 font-bold bg-black text-white rounded-lg hover:bg-zinc-800 transition">Simpan Log</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Tambah Task */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -1069,12 +833,7 @@ export default function TeamLeaderConsole() {
                 <label className="block font-bold text-zinc-900">Assign PIC (Opsional - Kosongkan jika untuk task pribadi)</label>
                 <div className="flex flex-wrap gap-1.5">
                   {PICS.map((pic) => (
-                    <button
-                      key={pic}
-                      type="button"
-                      onClick={() => togglePic(pic)}
-                      className={`h-8 px-3 text-xs font-medium border border-zinc-900 rounded-md transition cursor-pointer ${selectedPics.includes(pic) ? 'bg-black text-white font-bold' : 'bg-white text-zinc-800 hover:bg-zinc-100'}`}
-                    >
+                    <button key={pic} type="button" onClick={() => togglePic(pic)} className={`h-8 px-3 text-xs font-medium border border-zinc-900 rounded-md transition cursor-pointer ${selectedPics.includes(pic) ? 'bg-black text-white font-bold' : 'bg-white text-zinc-800 hover:bg-zinc-100'}`}>
                       {pic}
                     </button>
                   ))}
@@ -1083,43 +842,42 @@ export default function TeamLeaderConsole() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="block font-bold text-zinc-900">Prioritas</label>
-                  <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer">
+                  <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
                     {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="block font-bold text-zinc-900">Deadline (SLA)</label>
-                  <input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer" />
+                  <input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer" />
                 </div>
               </div>
               <div className="space-y-1.5">
                 <label className="block font-bold text-zinc-900">Kategori Pilar</label>
-                <select value={kategori} onChange={(e) => setKategori(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer">
+                <select value={kategori} onChange={(e) => setKategori(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
                   {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
                 <label className="block font-bold text-zinc-900">Detail Task</label>
-                <textarea rows={3} placeholder="Tuliskan deskripsi..." value={detailTask} onChange={(e) => setDetailTask(e.target.value)} required className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-black resize-none" />
+                <textarea rows={3} placeholder="Tuliskan deskripsi..." value={detailTask} onChange={(e) => setDetailTask(e.target.value)} required className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
               </div>
               <div className="space-y-1.5">
                 <label className="block font-bold text-zinc-900">Tindak Lanjut / Feedback Awal</label>
-                <textarea rows={2} placeholder="Catatan tindak lanjut..." value={feedback} onChange={(e) => setFeedback(e.target.value)} className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-black resize-none" />
+                <textarea rows={2} placeholder="Catatan tindak lanjut..." value={feedback} onChange={(e) => setFeedback(e.target.value)} className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
               </div>
               <div className="space-y-1.5">
                 <label className="block font-bold text-zinc-900">Link Referensi</label>
-                <input type="text" placeholder="https://..." value={buktiUrl} onChange={(e) => setBuktiUrl(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-black" />
+                <input type="text" placeholder="https://..." value={buktiUrl} onChange={(e) => setBuktiUrl(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none" />
               </div>
               <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
                 <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:text-black rounded cursor-pointer">Batal</button>
-                <button type="submit" className="px-5 py-2 text-xs font-bold bg-black text-white rounded-md hover:bg-zinc-800 transition shadow-xs cursor-pointer">Simpan Task</button>
+                <button type="submit" className="px-5 py-2 text-xs font-bold bg-black text-white rounded-md hover:bg-zinc-800 transition cursor-pointer">Simpan Task</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Modal Edit Task */}
       {editingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -1132,12 +890,7 @@ export default function TeamLeaderConsole() {
                 <label className="block font-bold text-zinc-900">PIC Assignment</label>
                 <div className="flex flex-wrap gap-1.5">
                   {PICS.map((pic) => (
-                    <button
-                      key={pic}
-                      type="button"
-                      onClick={() => togglePic(pic, true)}
-                      className={`h-8 px-3 text-xs font-medium border border-zinc-900 rounded-md transition cursor-pointer ${editPics.includes(pic) ? 'bg-black text-white font-bold' : 'bg-white text-zinc-800 hover:bg-zinc-100'}`}
-                    >
+                    <button key={pic} type="button" onClick={() => togglePic(pic, true)} className={`h-8 px-3 text-xs font-medium border border-zinc-900 rounded-md transition cursor-pointer ${editPics.includes(pic) ? 'bg-black text-white font-bold' : 'bg-white text-zinc-800 hover:bg-zinc-100'}`}>
                       {pic}
                     </button>
                   ))}
@@ -1146,7 +899,7 @@ export default function TeamLeaderConsole() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="block font-bold text-zinc-900">Prioritas</label>
-                  <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer">
+                  <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
                     {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
@@ -1157,25 +910,25 @@ export default function TeamLeaderConsole() {
               </div>
               <div className="space-y-1.5">
                 <label className="block font-bold text-zinc-900">Kategori Pilar</label>
-                <select value={editKategori} onChange={(e) => setEditKategori(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer">
+                <select value={editKategori} onChange={(e) => setEditKategori(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
                   {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
                 <label className="block font-bold text-zinc-900">Detail Task (Editable)</label>
-                <textarea rows={3} value={editDetailTask} onChange={(e) => setEditDetailTask(e.target.value)} required className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-black resize-none" />
+                <textarea rows={3} value={editDetailTask} onChange={(e) => setEditDetailTask(e.target.value)} required className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
               </div>
               <div className="space-y-1.5">
                 <label className="block font-bold text-zinc-900">History Feedback/Tindak Lanjut</label>
-                <textarea rows={3} placeholder="Catatan..." value={editFeedback} onChange={(e) => setEditFeedback(e.target.value)} className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-black resize-none" />
+                <textarea rows={3} placeholder="Catatan..." value={editFeedback} onChange={(e) => setEditFeedback(e.target.value)} className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
               </div>
               <div className="space-y-1.5">
                 <label className="block font-bold text-zinc-900">Link Referensi</label>
-                <input type="text" placeholder="https://..." value={editBuktiUrl} onChange={(e) => setEditBuktiUrl(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-black" />
+                <input type="text" placeholder="https://..." value={editBuktiUrl} onChange={(e) => setEditBuktiUrl(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none" />
               </div>
               <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
                 <button type="button" onClick={() => setEditingTask(null)} className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:text-black rounded cursor-pointer">Batal</button>
-                <button type="submit" className="px-5 py-2 text-xs font-bold bg-black text-white rounded-md hover:bg-zinc-800 transition shadow-xs cursor-pointer">Simpan Perubahan</button>
+                <button type="submit" className="px-5 py-2 text-xs font-bold bg-black text-white rounded-md hover:bg-zinc-800 transition cursor-pointer">Simpan Perubahan</button>
               </div>
             </form>
           </div>
