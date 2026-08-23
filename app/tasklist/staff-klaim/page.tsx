@@ -59,17 +59,14 @@ const parseTagKeterangan = (text: string) => {
     }
   })
 
-  // Hapus tag yang sudah terdeteksi dari teks
   let sisaTeks = text
   tags.forEach(t => {
     const regex = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig')
     sisaTeks = sisaTeks.replace(regex, '').trim()
   })
 
-  // Bersihkan karakter aneh
   sisaTeks = sisaTeks.replace(/^[^\w\s]+|[^\w\s]+$/g, '').trim()
 
-  // Jika tidak ada tag terdeteksi, tampilkan seluruh teks sebagai sisaTeks
   if (tags.length === 0 && sisaTeks) {
     return { tags: [], sisaTeks }
   }
@@ -124,12 +121,9 @@ export default function TrackerKlaimDashboard() {
   const [filterPic, setFilterPic] = useState('All')
   const [filterStatus, setFilterStatus] = useState('All')
   const [filterAging, setFilterAging] = useState('All')
+  const [sortBy, setSortBy] = useState('default') // Sorting dropdown
 
-  // Sort & Pagination
-  const [sortConfig, setSortConfig] = useState<{ key: 'aging' | 'nominal' | null; direction: 'asc' | 'desc' }>({
-    key: null,
-    direction: 'desc'
-  })
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(50)
 
@@ -326,13 +320,14 @@ export default function TrackerKlaimDashboard() {
 
       const finalStatusLower = (item.final_status || '').toLowerCase()
 
-      // Cancel/Reject = CLOSED (aging berhenti)
       if (finalStatusLower.includes('cancel') || finalStatusLower.includes('reject')) {
         isFinal = true
         isClosed = true
         tglAkhir = tglMasuk
-      } else if (item.final_status && item.tgl_mutasi) {
+      } else if (item.final_status && item.tgl_mutasi && finalStatusLower.includes('approved')) {
         tglAkhir = new Date(item.tgl_mutasi)
+        isFinal = true
+      } else if (finalStatusLower.includes('approved')) {
         isFinal = true
       }
 
@@ -366,7 +361,7 @@ export default function TrackerKlaimDashboard() {
     return counts
   }, [processedData])
 
-  // --- FILTERING ---
+  // --- FILTERING & SORTING ---
   const filteredData = useMemo(() => {
     let result = processedData
 
@@ -400,10 +395,13 @@ export default function TrackerKlaimDashboard() {
       result = result.filter(d => d.user.toLowerCase() === filterPic.toLowerCase())
     }
 
-    // Filter Status
+    // ✅ Filter Status - "Process Claim" = klaim yang belum final
     if (filterStatus !== 'All') {
-      if (filterStatus === 'Open') {
-        result = result.filter(d => !d.final_status || d.final_status.trim() === '')
+      if (filterStatus === 'Process Claim') {
+        result = result.filter(d => {
+          const fs = (d.final_status || '').toLowerCase()
+          return !fs.includes('approved') && !fs.includes('cancel') && !fs.includes('reject')
+        })
       } else if (filterStatus === 'Approved Claim') {
         result = result.filter(d => (d.final_status || '').toLowerCase().includes('approved'))
       } else if (filterStatus === 'Cancel Claim') {
@@ -413,32 +411,34 @@ export default function TrackerKlaimDashboard() {
       }
     }
 
-    // Filter Aging
+    // Filter Aging (TIDAK DIUBAH - tetap fleksibel untuk semua case)
     if (filterAging !== 'All') {
       result = result.filter(d => {
-        if (filterAging === 'Closed') return d.isClosed
-        if (filterAging === '<7') return !d.isClosed && d.agingDays < 7
-        if (filterAging === '7-14') return !d.isClosed && d.agingDays >= 7 && d.agingDays <= 14
-        if (filterAging === '>14') return !d.isClosed && d.agingDays > 14
+        if (filterAging === 'Closed') {
+          return d.isClosed
+        }
+        if (filterAging === '<7') {
+          return d.agingDays < 7
+        }
+        if (filterAging === '7-14') {
+          return d.agingDays >= 7 && d.agingDays <= 14
+        }
+        if (filterAging === '>14') {
+          return d.agingDays > 14
+        }
         return true
       })
     }
 
-    // Sort
-    if (sortConfig.key) {
-      result.sort((a, b) => {
-        if (sortConfig.key === 'aging') {
-          return sortConfig.direction === 'asc' ? a.agingDays - b.agingDays : b.agingDays - a.agingDays
-        }
-        if (sortConfig.key === 'nominal') {
-          return sortConfig.direction === 'asc' ? a.nominal_claim - b.nominal_claim : b.nominal_claim - a.nominal_claim
-        }
-        return 0
-      })
+    // ✅ Sorting hanya untuk Aging (Terlama / Terbaru)
+    if (sortBy === 'aging-oldest') {
+      result.sort((a, b) => b.agingDays - a.agingDays)
+    } else if (sortBy === 'aging-newest') {
+      result.sort((a, b) => a.agingDays - b.agingDays)
     }
 
     return result
-  }, [processedData, search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, filterAging, sortConfig])
+  }, [processedData, search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, filterAging, sortBy])
 
   // --- STATS ---
   const stats = useMemo(() => {
@@ -491,14 +491,7 @@ export default function TrackerKlaimDashboard() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, filterAging])
-
-  const handleSort = (key: 'aging' | 'nominal') => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
-    }))
-  }
+  }, [search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, filterAging, sortBy])
 
   const exportToCSV = () => {
     if (filteredData.length === 0) return
@@ -538,8 +531,13 @@ export default function TrackerKlaimDashboard() {
   }
 
   // --- FILTER OPTIONS ---
-  const finalStatusList = ['All', 'Open', 'Approved Claim', 'Cancel Claim', 'Reject Claim']
+  const finalStatusList = ['All', 'Process Claim', 'Approved Claim', 'Cancel Claim', 'Reject Claim']
   const agingList = ['All', '<7', '7-14', '>14', 'Closed']
+  const sortOptions = [
+    { value: 'default', label: 'Urutkan' },
+    { value: 'aging-oldest', label: 'Aging Terlama' },
+    { value: 'aging-newest', label: 'Aging Terbaru' }
+  ]
 
   const agingLabels: Record<string, string> = {
     All: 'Aging',
@@ -551,10 +549,16 @@ export default function TrackerKlaimDashboard() {
 
   const statusLabels: Record<string, string> = {
     All: 'Final Status',
-    Open: 'Open',
+    'Process Claim': 'Process Claim',
     'Approved Claim': 'Approved Claim',
     'Cancel Claim': 'Cancel Claim',
     'Reject Claim': 'Reject Claim'
+  }
+
+  const sortLabels: Record<string, string> = {
+    default: 'Urutkan',
+    'aging-oldest': 'Aging Terlama',
+    'aging-newest': 'Aging Terbaru'
   }
 
   // --- UI HELPERS ---
@@ -565,7 +569,8 @@ export default function TrackerKlaimDashboard() {
     filterKategori !== 'All' ||
     filterPic !== 'All' ||
     filterStatus !== 'All' ||
-    filterAging !== 'All'
+    filterAging !== 'All' ||
+    sortBy !== 'default'
 
   const clearAllFilters = () => {
     setSearch('')
@@ -575,6 +580,7 @@ export default function TrackerKlaimDashboard() {
     setFilterPic('All')
     setFilterStatus('All')
     setFilterAging('All')
+    setSortBy('default')
   }
 
   return (
@@ -651,7 +657,7 @@ export default function TrackerKlaimDashboard() {
         </div>
       </div>
 
-      {/* TOOLBAR & FILTERS - UI BARU */}
+      {/* TOOLBAR & FILTERS */}
       <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           {/* Search */}
@@ -663,12 +669,11 @@ export default function TrackerKlaimDashboard() {
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition"
             />
-            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm"></span>
+            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm">🔍</span>
           </div>
 
           {/* Filter Dropdowns */}
           <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-            {/* Bulan */}
             <select
               value={filterBulan}
               onChange={e => setFilterBulan(e.target.value)}
@@ -676,12 +681,11 @@ export default function TrackerKlaimDashboard() {
             >
               {bulanList.map(b => (
                 <option key={b} value={b}>
-                  {b === 'All' ? 'Bulan' : b === '(Tanpa Bulan)' ? '️ Tanpa Bulan' : b}
+                  {b === 'All' ? 'Bulan' : b === '(Tanpa Bulan)' ? '⚠️ Tanpa Bulan' : b}
                 </option>
               ))}
             </select>
 
-            {/* Ekspedisi */}
             <select
               value={filterEkspedisi}
               onChange={e => setFilterEkspedisi(e.target.value)}
@@ -694,7 +698,6 @@ export default function TrackerKlaimDashboard() {
               ))}
             </select>
 
-            {/* Kategori */}
             <select
               value={filterKategori}
               onChange={e => setFilterKategori(e.target.value)}
@@ -707,7 +710,6 @@ export default function TrackerKlaimDashboard() {
               ))}
             </select>
 
-            {/* PIC Staff */}
             <select
               value={filterPic}
               onChange={e => setFilterPic(e.target.value)}
@@ -723,7 +725,6 @@ export default function TrackerKlaimDashboard() {
                 ))}
             </select>
 
-            {/* Final Status */}
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
@@ -736,7 +737,6 @@ export default function TrackerKlaimDashboard() {
               ))}
             </select>
 
-            {/* Aging */}
             <select
               value={filterAging}
               onChange={e => setFilterAging(e.target.value)}
@@ -745,6 +745,19 @@ export default function TrackerKlaimDashboard() {
               {agingList.map(a => (
                 <option key={a} value={a}>
                   {agingLabels[a]}
+                </option>
+              ))}
+            </select>
+
+            {/* ✅ Dropdown Urutkan (Baru) */}
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+            >
+              {sortOptions.map(s => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </select>
@@ -764,49 +777,43 @@ export default function TrackerKlaimDashboard() {
             {filterBulan !== 'All' && (
               <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
                 Bulan: {filterBulan === '(Tanpa Bulan)' ? '⚠️ Tanpa Bulan' : filterBulan}
-                <button onClick={() => setFilterBulan('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
-                  ✕
-                </button>
+                <button onClick={() => setFilterBulan('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
               </span>
             )}
             {filterEkspedisi !== 'All' && (
               <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
                 Ekspedisi: {filterEkspedisi}
-                <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
-                  ✕
-                </button>
+                <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
               </span>
             )}
             {filterKategori !== 'All' && (
               <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
                 Kategori: {filterKategori}
-                <button onClick={() => setFilterKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
-                  ✕
-                </button>
+                <button onClick={() => setFilterKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
               </span>
             )}
             {filterPic !== 'All' && (
               <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
                 PIC: {filterPic} · {picWorkload[filterPic] || 0}
-                <button onClick={() => setFilterPic('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
-                  ✕
-                </button>
+                <button onClick={() => setFilterPic('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
               </span>
             )}
             {filterStatus !== 'All' && (
               <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
                 Status: {statusLabels[filterStatus] || filterStatus}
-                <button onClick={() => setFilterStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
-                  
-                </button>
+                <button onClick={() => setFilterStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
               </span>
             )}
             {filterAging !== 'All' && (
               <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
                 Aging: {agingLabels[filterAging] || filterAging}
-                <button onClick={() => setFilterAging('All')} className="text-zinc-400 hover:text-rose-600 font-bold">
-                  ✕
-                </button>
+                <button onClick={() => setFilterAging('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
+              </span>
+            )}
+            {sortBy !== 'default' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                Urutkan: {sortLabels[sortBy] || sortBy}
+                <button onClick={() => setSortBy('default')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
               </span>
             )}
 
@@ -829,18 +836,8 @@ export default function TrackerKlaimDashboard() {
                 <th className="px-5 py-4 text-center">NO. AWB & KLIEN</th>
                 <th className="px-5 py-4 text-center">EKSPEDISI & KASUS</th>
                 <th className="px-5 py-4 text-center">STATUS PROGRES → FINAL</th>
-                <th
-                  className="px-5 py-4 text-center cursor-pointer hover:bg-zinc-100 transition"
-                  onClick={() => handleSort('aging')}
-                >
-                  TIMELINE & AGING {sortConfig.key === 'aging' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                </th>
-                <th
-                  className="px-5 py-4 text-center cursor-pointer hover:bg-zinc-100 transition"
-                  onClick={() => handleSort('nominal')}
-                >
-                  NOMINAL CLAIM {sortConfig.key === 'nominal' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                </th>
+                <th className="px-5 py-4 text-center">TIMELINE & AGING</th>
+                <th className="px-5 py-4 text-center">NOMINAL CLAIM</th>
                 <th className="px-5 py-4 text-center">KETERANGAN</th>
                 <th className="px-5 py-4 text-center">PIC STAFF</th>
               </tr>
