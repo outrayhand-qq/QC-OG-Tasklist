@@ -21,7 +21,7 @@ type KlaimData = {
   sla: string
 }
 
-// --- HELPER FUNCTIONS ---
+// --- HELPER FUNCTIONS (hanya yang sudah ada) ---
 const parseTagKeterangan = (text: string) => {
   const tags = []
   const lowerText = text.toLowerCase()
@@ -93,7 +93,7 @@ export default function TrackerKlaimDashboard() {
         user: String(item.user || item.USER || item.pic_staff || 'Staff'),
         jenis_ekspedisi: String(item.jenis_ekspedisi || item.JENIS_EKSPEDISI || item.ekspedisi || '-'),
         date_added: String(item.date_added || item.DATE_ADDED || item.tgl_masuk || new Date().toISOString()),
-        bulan: String(item.bulan || item.BULAN || ''),
+        bulan: String(item.bulan || item.BULAN || ''), // nilai asli dari GSheets
         client_name: String(item.client_name || item.CLIENT_NAME || item.klien || '-'),
         no_awb: String(item.no_awb || item.NO_AWB || item.awb || '-'),
         kategori_case: String(item.kategori_case || item.KATEGORI_CASE || item.kasus || '-'),
@@ -131,7 +131,12 @@ export default function TrackerKlaimDashboard() {
   const bulanList = useMemo(() => {
     const setBulan = new Set<string>()
     data.forEach(d => {
-      if (d.bulan && d.bulan.trim() !== '') setBulan.add(d.bulan.trim())
+      const bulan = d.bulan.trim()
+      if (bulan === '') {
+        setBulan.add('(Tanpa Bulan)')
+      } else {
+        setBulan.add(bulan)
+      }
     })
     return ['All', ...Array.from(setBulan)]
   }, [data])
@@ -205,7 +210,12 @@ export default function TrackerKlaimDashboard() {
       )
     }
     if (filterBulan !== 'All') {
-      result = result.filter(d => d.bulan.toLowerCase() === filterBulan.toLowerCase())
+      result = result.filter(d => {
+        if (filterBulan === '(Tanpa Bulan)') {
+          return d.bulan.trim() === ''
+        }
+        return d.bulan.trim().toLowerCase() === filterBulan.toLowerCase()
+      })
     }
     if (filterEkspedisi !== 'All') {
       result = result.filter(d => d.jenis_ekspedisi.toLowerCase() === filterEkspedisi.toLowerCase())
@@ -394,7 +404,11 @@ export default function TrackerKlaimDashboard() {
 
           <div className="flex flex-wrap items-center gap-2">
             <select value={filterBulan} onChange={e => setFilterBulan(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              {bulanList.map(b => <option key={b} value={b}>{b === 'All' ? 'Semua Bulan' : b}</option>)}
+              {bulanList.map(b => (
+                <option key={b} value={b}>
+                  {b === 'All' ? 'Semua Bulan' : b === '(Tanpa Bulan)' ? '⚠️ Tanpa Bulan' : b}
+                </option>
+              ))}
             </select>
             <select value={filterEkspedisi} onChange={e => setFilterEkspedisi(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
               {ekspedisiList.map(e => <option key={e} value={e}>{e === 'All' ? 'Semua Ekspedisi' : e}</option>)}
