@@ -63,12 +63,18 @@ export default function TeamLeaderConsole() {
   const [selectedPicFilter, setSelectedPicFilter] = useState<string>('All')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // State Fitur High Priority 1 & 2
+  // State Fitur High, Medium, & Low Priority
   const [activeBadgeFilter, setActiveBadgeFilter] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'deadline' | 'priority' | 'updated'>('deadline')
-
-  // State untuk History Collapse (High Priority 3)
   const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({})
+  
+  // State Low Priority #10 (Quick Add Modal)
+  const [quickAddModalTaskId, setQuickAddModalTaskId] = useState<string | null>(null)
+  const [quickAddText, setQuickAddText] = useState<string>('')
+
+  // State Pagination (Medium Priority #8)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const itemsPerPage = 15
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -143,7 +149,6 @@ export default function TeamLeaderConsole() {
     router.push('/')
   }
 
-  // --- LOGIC: HISTORY LOG TERSTRUKTUR (High Priority #3) ---
   const handleAddFeedbackLog = async (taskId: string, newEntry: string) => {
     const cleanEntry = newEntry.trim()
     if (!cleanEntry) return
@@ -188,6 +193,8 @@ export default function TeamLeaderConsole() {
       )
       const inputEl = document.getElementById(`new-feedback-${taskId}`) as HTMLInputElement | null
       if (inputEl) inputEl.value = ''
+      setQuickAddModalTaskId(null)
+      setQuickAddText('')
     } else {
       alert('Gagal menambah tindak lanjut: ' + error.message)
     }
@@ -400,6 +407,24 @@ export default function TeamLeaderConsole() {
     return result
   }, [scopedTasks, selectedKategori, selectedStatus, selectedPriority, searchQuery, activeBadgeFilter, sortBy])
 
+  // Low Priority #11: Custom Export CSV sesuai filter aktif & penamaan dinamis
+  const handleExportDynamicCSV = () => {
+    const filterContext = selectedKategori !== 'All' ? selectedKategori.replace(/\s+/g, '_') : 'All_Cat'
+    const dateStr = new Date().toISOString().split('T')[0]
+    const fileName = `TL_${filterContext}_${dateStr}.csv`
+    exportTasksToCSV(filteredTasks, fileName)
+  }
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedKategori, selectedStatus, selectedPriority, selectedPicFilter, searchQuery, activeBadgeFilter, selectedDivisi])
+
+  const totalPages = Math.ceil(filteredTasks.length / itemsPerPage) || 1
+  const paginatedTasks = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    return filteredTasks.slice(start, start + itemsPerPage)
+  }, [filteredTasks, currentPage])
+
   const getTaskUrgencyStyle = (task: Task) => {
     const currentStat = task.final_status || task.status || 'Open'
     if (isClosedStatus(currentStat)) {
@@ -555,11 +580,11 @@ export default function TeamLeaderConsole() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => exportTasksToCSV(filteredTasks, 'Tasklist_TL')}
+              onClick={handleExportDynamicCSV}
               className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <span>⤓</span>
-              <span>Export CSV</span>
+              <span>Export CSV (Filter Aktif)</span>
             </button>
 
             <button
@@ -598,98 +623,140 @@ export default function TeamLeaderConsole() {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-2.5 rounded-lg border border-zinc-200/80 shadow-2xs">
-        <div className="flex items-center gap-1 overflow-x-auto p-0.5 text-xs font-medium scrollbar-none">
-          <button
-            onClick={() => setSelectedKategori('All')}
-            className={`px-3 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${
-              selectedKategori === 'All'
-                ? 'bg-zinc-100 text-zinc-900 font-bold border border-zinc-200/80'
-                : 'text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            Semua Kategori
-          </button>
-          {CATEGORIES.map((cat) => (
+      {/* Toolbar Filter & Chip Kombinasi Aktif */}
+      <div className="bg-white p-3 rounded-lg border border-zinc-200/80 shadow-2xs space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-1 overflow-x-auto p-0.5 text-xs font-medium scrollbar-none">
             <button
-              key={cat}
-              onClick={() => setSelectedKategori(cat)}
+              onClick={() => setSelectedKategori('All')}
               className={`px-3 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${
-                selectedKategori === cat
+                selectedKategori === 'All'
                   ? 'bg-zinc-100 text-zinc-900 font-bold border border-zinc-200/80'
                   : 'text-zinc-600 hover:text-zinc-900'
               }`}
             >
-              {cat}
+              Semua Kategori
             </button>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Cari task, PIC..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-52 pl-7 pr-3 py-1.5 bg-zinc-50 border border-zinc-200/90 rounded text-xs placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-zinc-400 transition"
-            />
-            <span className="absolute left-2.5 top-1.5 text-zinc-400 text-xs">🔍</span>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedKategori(cat)}
+                className={`px-3 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${
+                  selectedKategori === cat
+                    ? 'bg-zinc-100 text-zinc-900 font-bold border border-zinc-200/80'
+                    : 'text-zinc-600 hover:text-zinc-900'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
 
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="bg-zinc-50 border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-bold text-zinc-800 focus:outline-none cursor-pointer"
-          >
-            <option value="deadline">Urut: Deadline terdekat</option>
-            <option value="priority">Urut: Priority tertinggi</option>
-            <option value="updated">Urut: Terakhir diupdate</option>
-          </select>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Cari task, PIC..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full sm:w-52 pl-7 pr-3 py-1.5 bg-zinc-50 border border-zinc-200/90 rounded text-xs placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-zinc-400 transition"
+              />
+              <span className="absolute left-2.5 top-1.5 text-zinc-400 text-xs">🔍</span>
+            </div>
 
-          {isSuperAdmin && (
             <select
-              value={selectedPicFilter}
-              onChange={(e) => setSelectedPicFilter(e.target.value)}
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-zinc-50 border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-bold text-zinc-800 focus:outline-none cursor-pointer"
+            >
+              <option value="deadline">Urut: Deadline terdekat</option>
+              <option value="priority">Urut: Priority tertinggi</option>
+              <option value="updated">Urut: Terakhir diupdate</option>
+            </select>
+
+            {isSuperAdmin && (
+              <select
+                value={selectedPicFilter}
+                onChange={(e) => setSelectedPicFilter(e.target.value)}
+                className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
+              >
+                <option value="All">Semua User</option>
+                {ALL_PICS.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            )}
+
+            <select
+              value={selectedPriority}
+              onChange={(e) => setSelectedPriority(e.target.value)}
               className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
             >
-              <option value="All">Semua User</option>
-              {ALL_PICS.map((p) => (
+              <option value="All">Semua Priority</option>
+              {PRIORITIES.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
-          )}
 
-          <select
-            value={selectedPriority}
-            onChange={(e) => setSelectedPriority(e.target.value)}
-            className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
-          >
-            <option value="All">Semua Priority</option>
-            {PRIORITIES.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
-          >
-            <option value="All">Semua Status</option>
-            <option value="Open">Open</option>
-            <option value="On Progress">On Progress</option>
-            <option value="Closed">Closed</option>
-          </select>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="bg-white border border-zinc-200/90 rounded px-2.5 py-1.5 text-xs font-semibold text-zinc-700 focus:outline-none cursor-pointer"
+            >
+              <option value="All">Semua Status</option>
+              <option value="Open">Open</option>
+              <option value="On Progress">On Progress</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </div>
         </div>
+
+        {/* CHIP FILTER AKTIF */}
+        {(selectedKategori !== 'All' || selectedPriority !== 'All' || selectedStatus !== 'All' || selectedPicFilter !== 'All' || searchQuery) && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100 text-[11px]">
+            <span className="text-zinc-400 font-bold uppercase tracking-wider text-[10px]">Filter Aktif:</span>
+            {searchQuery && (
+              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
+                Pencarian: "{searchQuery}" <button onClick={() => setSearchQuery('')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
+              </span>
+            )}
+            {selectedKategori !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
+                Kategori: {selectedKategori} <button onClick={() => setSelectedKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
+              </span>
+            )}
+            {selectedPriority !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
+                Priority: {selectedPriority} <button onClick={() => setSelectedPriority('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
+              </span>
+            )}
+            {selectedStatus !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
+                Status: {selectedStatus} <button onClick={() => setSelectedStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
+              </span>
+            )}
+            {selectedPicFilter !== 'All' && (
+              <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">
+                User: {selectedPicFilter} <button onClick={() => setSelectedPicFilter('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button>
+              </span>
+            )}
+            <button 
+              onClick={() => { setSelectedKategori('All'); setSelectedPriority('All'); setSelectedStatus('All'); setSelectedPicFilter('All'); setSearchQuery(''); }}
+              className="text-sky-600 hover:underline font-bold ml-1"
+            >
+              Hapus semua filter
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Tabel Data */}
       <div className="bg-white border border-zinc-200/90 rounded-lg shadow-2xs overflow-hidden">
         {loading ? (
           <div className="py-20 text-center text-xs text-zinc-400 font-bold uppercase tracking-widest animate-pulse">
             Memuat Konsol Tasklist...
           </div>
-        ) : filteredTasks.length === 0 ? (
+        ) : paginatedTasks.length === 0 ? (
           <div className="py-20 text-center text-xs text-zinc-500 font-medium space-y-1">
             <p className="font-bold text-zinc-700">Tidak ada task yang ditemukan</p>
             <p className="text-zinc-400 text-[11px]">Cobalah mengubah filter pencarian atau buat task baru.</p>
@@ -707,7 +774,7 @@ export default function TeamLeaderConsole() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 text-xs text-zinc-800">
-              {filteredTasks.map((task) => {
+              {paginatedTasks.map((task) => {
                 const isQC = task.pic_assignment?.toLowerCase().includes('qc')
                 const currentStatus = task.final_status || task.status || 'Open'
                 const isClosed = currentStatus === 'Closed'
@@ -716,29 +783,50 @@ export default function TeamLeaderConsole() {
                 
                 const urgencyStyle = getTaskUrgencyStyle(task)
 
+                let barPercent = 0
+                let barColor = 'bg-emerald-400'
+                if (!isClosed && task.deadline) {
+                  const diffHours = (new Date(task.deadline).getTime() - Date.now()) / (1000 * 60 * 60)
+                  if (diffHours < 0) { barPercent = 100; barColor = 'bg-rose-500' }
+                  else if (diffHours <= 24) { barPercent = 100 - ((diffHours / 24) * 100); barColor = 'bg-amber-400' }
+                  else { barPercent = 30; barColor = 'bg-emerald-400' }
+                }
+
                 const feedbackLines = task.feedback ? task.feedback.split('\n').filter(Boolean) : []
                 const isExpanded = expandedHistory[task.id]
                 const displayedLines = isExpanded ? feedbackLines : feedbackLines.slice(-2)
 
                 return (
                   <tr key={task.id} className={`hover:bg-zinc-50/60 transition group border-l-4 ${urgencyStyle.borderColor}`}>
+                    
+                    {/* DESKRIPSI TUGAS & KETERANGAN DEADLINE */}
                     <td className="py-3.5 px-4 align-top space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
-                          {task.detail_task}
-                        </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-zinc-900 group-hover:text-black leading-relaxed">
+                            {task.detail_task}
+                          </span>
+                          <button
+                            onClick={() => openEditModal(task)}
+                            title="Edit Task"
+                            className="inline-flex items-center justify-center p-1 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 rounded transition shrink-0 cursor-pointer shadow-2xs"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {/* Low Priority #10: Quick-Add Tombol Instan */}
                         <button
-                          onClick={() => openEditModal(task)}
-                          title="Edit Task"
-                          className="inline-flex items-center justify-center p-1 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 rounded transition shrink-0 cursor-pointer shadow-2xs"
+                          onClick={() => setQuickAddModalTaskId(task.id)}
+                          className="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded text-[10px] font-bold transition cursor-pointer shadow-2xs"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
+                          + Quick Log
                         </button>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono">
                         {task.deadline && (
                           <div className="text-zinc-500 flex items-center gap-1 font-semibold">
                             <span>🕒</span>
@@ -750,6 +838,12 @@ export default function TeamLeaderConsole() {
                           <span className={`px-2 py-0.5 rounded font-black tracking-wide ${deadlineAlert.type === 'overdue' ? 'bg-rose-100 border border-rose-300 text-rose-800 animate-pulse' : 'bg-amber-100 border border-amber-300 text-amber-900'}`}>
                             {deadlineAlert.text}
                           </span>
+                        )}
+
+                        {!isClosed && task.deadline && (
+                          <div className="w-20 h-1.5 bg-zinc-100 rounded-full overflow-hidden inline-block" title="Progress waktu menuju deadline">
+                            <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${barPercent}%` }}></div>
+                          </div>
                         )}
 
                         {isClosed && task.waktu_close && (
@@ -816,16 +910,17 @@ export default function TeamLeaderConsole() {
                         </div>
                       </div>
 
+                      {/* Low Priority #9: Tampilan Lampiran / Link Lebih Menonjol */}
                       {task.bukti_url && (
-                        <div className="pt-0.5">
+                        <div className="pt-1">
                           <a
                             href={task.bukti_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-[11px] font-semibold border border-zinc-200 transition"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200/80 transition shadow-2xs"
                           >
                             <span>🔗</span>
-                            <span className="truncate max-w-xs">{task.bukti_url}</span>
+                            <span>Buka Lampiran Link</span>
                           </a>
                         </div>
                       )}
@@ -858,21 +953,27 @@ export default function TeamLeaderConsole() {
                     </td>
 
                     <td className="py-3.5 px-4 align-middle">
-                      <span className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold ${currentStatus === 'Closed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : currentStatus === 'On Progress' ? 'bg-sky-50 text-sky-800 border border-sky-200' : 'bg-zinc-100 text-zinc-700 border border-zinc-200'}`}>
-                        {currentStatus}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle text-right">
                       <select
                         value={currentStatus}
                         onChange={(e) => updateStatus(task.id, e.target.value)}
-                        className="text-xs bg-white border border-zinc-200 rounded px-2 py-1 font-medium text-zinc-800 hover:border-zinc-400 focus:outline-none cursor-pointer"
+                        className={`text-xs font-bold rounded-lg px-2.5 py-1.5 border transition cursor-pointer appearance-none ${
+                          currentStatus === 'Closed' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                          currentStatus === 'On Progress' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                        }`}
                       >
                         <option value="Open">Open</option>
                         <option value="On Progress">On Progress</option>
                         <option value="Closed">Closed</option>
                       </select>
+                    </td>
+
+                    <td className="py-3.5 px-4 align-middle text-right">
+                      <button
+                        onClick={() => openEditModal(task)}
+                        className="px-2.5 py-1 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 rounded text-xs font-semibold shadow-2xs transition cursor-pointer"
+                      >
+                        Edit
+                      </button>
                     </td>
 
                   </tr>
@@ -883,6 +984,33 @@ export default function TeamLeaderConsole() {
         )}
       </div>
 
+      {/* PAGINATION CONTROLS */}
+      {filteredTasks.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border border-zinc-200 rounded-lg text-xs shadow-sm">
+          <div className="text-zinc-500 font-medium">
+            Menampilkan <span className="font-bold text-zinc-800">{(currentPage - 1) * itemsPerPage + 1}</span> sampai <span className="font-bold text-zinc-800">{Math.min(currentPage * itemsPerPage, filteredTasks.length)}</span> dari <span className="font-bold text-zinc-800">{filteredTasks.length}</span> task
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+              disabled={currentPage === 1} 
+              className="px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-zinc-700 font-bold disabled:opacity-40 hover:bg-zinc-100 transition cursor-pointer"
+            >
+              Sebelumnya
+            </button>
+            <span className="px-2 font-bold text-zinc-700">Halaman {currentPage} dari {totalPages}</span>
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+              disabled={currentPage === totalPages} 
+              className="px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-zinc-700 font-bold disabled:opacity-40 hover:bg-zinc-100 transition cursor-pointer"
+            >
+              Selanjutnya
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Footer / Panel Pojok Bawah */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xs border-t border-zinc-200/80 px-4 py-2 flex items-center justify-between text-xs shadow-md z-40">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
@@ -904,6 +1032,31 @@ export default function TeamLeaderConsole() {
         </button>
       </div>
 
+      {/* Modal Quick Add Tindak Lanjut (Low Priority #10) */}
+      {quickAddModalTaskId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white border border-zinc-200 w-full max-w-md rounded-xl shadow-2xl p-5 space-y-4 text-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-sm text-zinc-900">Tambah Tindak Lanjut Cepat</h3>
+              <button onClick={() => setQuickAddModalTaskId(null)} className="text-zinc-400 hover:text-black font-bold p-1 cursor-pointer">✕</button>
+            </div>
+            <textarea
+              autoFocus
+              rows={3}
+              value={quickAddText}
+              onChange={(e) => setQuickAddText(e.target.value)}
+              placeholder="Tulis update tindak lanjut di sini..."
+              className="w-full p-3 border border-zinc-300 rounded-lg focus:outline-none focus:border-black resize-none"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setQuickAddModalTaskId(null)} className="px-4 py-2 font-semibold text-zinc-600 hover:text-black">Batal</button>
+              <button onClick={() => handleAddFeedbackLog(quickAddModalTaskId, quickAddText)} className="px-4 py-2 font-bold bg-black text-white rounded-lg hover:bg-zinc-800 transition">Simpan Log</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah Task */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -966,6 +1119,7 @@ export default function TeamLeaderConsole() {
         </div>
       )}
 
+      {/* Modal Edit Task */}
       {editingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
