@@ -6,17 +6,19 @@ import { useRouter } from 'next/navigation'
 // --- TYPE DEFINITIONS ---
 type KlaimData = {
   id: string
-  awb: string
-  klien: string
-  ekspedisi: string
-  kasus: string
-  status_progres: string
-  status_final: string | null
-  tgl_masuk: string
+  user: string
+  jenis_ekspedisi: string
+  date_added: string
+  bulan: string
+  client_name: string
+  no_awb: string
+  kategori_case: string
+  update_status: string
+  final_status: string | null
+  keterangan: string
   tgl_mutasi: string | null
   nominal_claim: number
-  keterangan: string
-  pic_staff: string
+  sla: string
 }
 
 // --- HELPER FUNCTIONS ---
@@ -88,17 +90,19 @@ export default function TrackerKlaimDashboard() {
       
       const mappedData: KlaimData[] = rawArray.map((item: any, index: number) => ({
         id: String(item.id || item.ID || index + 1),
-        awb: String(item.awb || item.NO_AWB || item.No_AWB || item.resi || '-'),
-        klien: String(item.klien || item.KLIEN || item.nama_klien || '-'),
-        ekspedisi: String(item.ekspedisi || item.EKSPEDISI || '-'),
-        kasus: String(item.kasus || item.KASUS || item.kategori_kasus || '-'),
-        status_progres: String(item.status_progres || item.STATUS_PROGRES || item.status || '-'),
-        status_final: item.status_final || item.STATUS_FINAL || item.final_status || null,
-        tgl_masuk: String(item.tgl_masuk || item.TGL_MASUK || item.tanggal_masuk || new Date().toISOString()),
-        tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || item.tanggal_mutasi || null,
-        nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || item.nominal || 0),
+        user: String(item.user || item.USER || item.pic_staff || 'Staff'),
+        jenis_ekspedisi: String(item.jenis_ekspedisi || item.JENIS_EKSPEDISI || item.ekspedisi || '-'),
+        date_added: String(item.date_added || item.DATE_ADDED || item.tgl_masuk || new Date().toISOString()),
+        bulan: String(item.bulan || item.BULAN || ''),
+        client_name: String(item.client_name || item.CLIENT_NAME || item.klien || '-'),
+        no_awb: String(item.no_awb || item.NO_AWB || item.awb || '-'),
+        kategori_case: String(item.kategori_case || item.KATEGORI_CASE || item.kasus || '-'),
+        update_status: String(item.update_status || item.UPDATE_STATUS || item.status_progres || '-'),
+        final_status: item.final_status || item.FINAL_STATUS || item.status_final || null,
         keterangan: String(item.keterangan || item.KETERANGAN || ''),
-        pic_staff: String(item.pic_staff || item.PIC_STAFF || item.pic || 'Staff')
+        tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || null,
+        nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || 0),
+        sla: String(item.sla || item.SLA || '-')
       }))
 
       setData(mappedData)
@@ -123,19 +127,33 @@ export default function TrackerKlaimDashboard() {
     fetchData()
   }, [])
 
-  // --- EXTRACT DYNAMIC MONTHS FROM DATA ---
+  // --- DYNAMIC FILTER LISTS ---
   const bulanList = useMemo(() => {
-    const monthsSet = new Set<string>()
-    data.forEach(item => {
-      if (item.tgl_masuk) {
-        const d = new Date(item.tgl_masuk)
-        if (!isNaN(d.getTime())) {
-          const monthYear = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-          monthsSet.add(monthYear)
-        }
+    const setBulan = new Set<string>()
+    data.forEach(d => {
+      if (d.bulan && d.bulan.trim() !== '') setBulan.add(d.bulan.trim())
+    })
+    return ['All', ...Array.from(setBulan)]
+  }, [data])
+
+  const ekspedisiList = useMemo(() => {
+    const setEks = new Set<string>()
+    data.forEach(d => {
+      if (d.jenis_ekspedisi && d.jenis_ekspedisi !== '-' && d.jenis_ekspedisi.trim() !== '') {
+        setEks.add(d.jenis_ekspedisi.trim())
       }
     })
-    return ['All', ...Array.from(monthsSet)]
+    return ['All', ...Array.from(setEks)]
+  }, [data])
+
+  const kategoriList = useMemo(() => {
+    const setKat = new Set<string>()
+    data.forEach(d => {
+      if (d.kategori_case && d.kategori_case !== '-' && d.kategori_case.trim() !== '') {
+        setKat.add(d.kategori_case.trim())
+      }
+    })
+    return ['All', ...Array.from(setKat)]
   }, [data])
 
   // --- DATA PROCESSING (AGING LOGIC) ---
@@ -143,11 +161,11 @@ export default function TrackerKlaimDashboard() {
     const today = new Date()
     
     return data.map(item => {
-      const tglMasuk = new Date(item.tgl_masuk)
+      const tglMasuk = new Date(item.date_added)
       let tglAkhir = today
       let isFinal = false
 
-      if (item.status_final && item.tgl_mutasi) {
+      if (item.final_status && item.tgl_mutasi) {
         tglAkhir = new Date(item.tgl_mutasi)
         isFinal = true
       }
@@ -157,12 +175,9 @@ export default function TrackerKlaimDashboard() {
 
       let agingStatus = 'green'
       if (agingDays >= 7 && agingDays <= 14) agingStatus = 'yellow'
-      if (agingDays > 14) agingStatus.toString() === 'red'
+      if (agingDays > 14) agingStatus = 'red'
 
-      // Bulan format untuk filter
-      const bulanStr = !isNaN(tglMasuk.getTime()) ? tglMasuk.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : ''
-
-      return { ...item, agingDays, isFinal, agingStatus, bulanStr, tglMasukObj: tglMasuk, tglMutasiObj: item.tgl_mutasi ? new Date(item.tgl_mutasi) : null }
+      return { ...item, agingDays, isFinal, agingStatus, tglMasukObj: tglMasuk, tglMutasiObj: item.tgl_mutasi ? new Date(item.tgl_mutasi) : null }
     })
   }, [data])
 
@@ -170,8 +185,9 @@ export default function TrackerKlaimDashboard() {
   const picWorkload = useMemo(() => {
     const counts: Record<string, number> = {}
     processedData.forEach(d => {
-      if (!counts[d.pic_staff]) counts[d.pic_staff] = 0
-      counts[d.pic_staff]++
+      const pic = d.user || 'Staff'
+      if (!counts[pic]) counts[pic] = 0
+      counts[pic]++
     })
     return counts
   }, [processedData])
@@ -183,18 +199,26 @@ export default function TrackerKlaimDashboard() {
     if (search) {
       const q = search.toLowerCase()
       result = result.filter(d => 
-        d.awb.toLowerCase().includes(q) || 
-        d.klien.toLowerCase().includes(q) || 
+        d.no_awb.toLowerCase().includes(q) || 
+        d.client_name.toLowerCase().includes(q) || 
         d.keterangan.toLowerCase().includes(q)
       )
     }
-    if (filterBulan !== 'All') result = result.filter(d => d.bulanStr === filterBulan)
-    if (filterEkspedisi !== 'All') result = result.filter(d => d.ekspedisi.toLowerCase() === filterEkspedisi.toLowerCase())
-    if (filterKategori !== 'All') result = result.filter(d => d.kasus.toLowerCase() === filterKategori.toLowerCase())
-    if (filterPic !== 'All') result = result.filter(d => d.pic_staff.toLowerCase() === filterPic.toLowerCase())
+    if (filterBulan !== 'All') {
+      result = result.filter(d => d.bulan.toLowerCase() === filterBulan.toLowerCase())
+    }
+    if (filterEkspedisi !== 'All') {
+      result = result.filter(d => d.jenis_ekspedisi.toLowerCase() === filterEkspedisi.toLowerCase())
+    }
+    if (filterKategori !== 'All') {
+      result = result.filter(d => d.kategori_case.toLowerCase() === filterKategori.toLowerCase())
+    }
+    if (filterPic !== 'All') {
+      result = result.filter(d => d.user.toLowerCase() === filterPic.toLowerCase())
+    }
     if (filterStatus !== 'All') {
       if (filterStatus === 'Open') result = result.filter(d => !d.isFinal)
-      else result = result.filter(d => (d.status_final || '').toLowerCase() === filterStatus.toLowerCase())
+      else result = result.filter(d => (d.final_status || '').toLowerCase() === filterStatus.toLowerCase())
     }
 
     if (sortConfig.key) {
@@ -225,10 +249,10 @@ export default function TrackerKlaimDashboard() {
     let cancelRejectNominal = 0
 
     filteredData.forEach(d => {
-      const finalStat = (d.status_final || '').toLowerCase()
-      const progStat = (d.status_progres || '').toLowerCase()
+      const finalStat = (d.final_status || '').toLowerCase()
+      const progStat = (d.update_status || '').toLowerCase()
 
-      if (!d.status_final || progStat.includes('pengajuan') || progStat.includes('claim')) {
+      if (!d.final_status || finalStat.trim() === '' || progStat.includes('pengajuan') || progStat.includes('claim')) {
         pengajuanResi++
         pengajuanNominal += d.nominal_claim
       }
@@ -277,8 +301,8 @@ export default function TrackerKlaimDashboard() {
     const csvContent = [
       headers.join(','),
       ...filteredData.map(d => [
-        d.awb, `"${d.klien}"`, d.ekspedisi, d.kasus, d.status_progres, d.status_final || '', 
-        d.tgl_masuk, d.tgl_mutasi || '', d.agingDays, d.nominal_claim, `"${d.keterangan.replace(/"/g, '""')}"`, d.pic_staff
+        d.no_awb, `"${d.client_name}"`, d.jenis_ekspedisi, d.kategori_case, d.update_status, d.final_status || '', 
+        d.date_added, d.tgl_mutasi || '', d.agingDays, d.nominal_claim, `"${d.keterangan.replace(/"/g, '""')}"`, d.user
       ].join(','))
     ].join('\n')
 
@@ -292,9 +316,6 @@ export default function TrackerKlaimDashboard() {
     document.body.removeChild(link)
   }
 
-  // Dynamic lists from data
-  const ekspedisiList = ['All', ...Array.from(new Set(processedData.map(d => d.ekspedisi).filter(Boolean)))]
-  const kategoriList = ['All', ...Array.from(new Set(processedData.map(d => d.kasus).filter(Boolean)))]
   const finalStatusList = ['All', 'Open', 'Approved Claim', 'Cancel Claim', 'Reject Claim']
 
   return (
@@ -413,23 +434,23 @@ export default function TrackerKlaimDashboard() {
         )}
       </div>
 
-      {/* DATA TABLE */}
+      {/* DATA TABLE (CENTER ALIGNED) */}
       <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs whitespace-nowrap">
+          <table className="w-full text-center text-xs whitespace-nowrap">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">
               <tr>
-                <th className="px-5 py-4">NO. AWB & KLIEN</th>
-                <th className="px-5 py-4">EKSPEDISI & KASUS</th>
-                <th className="px-5 py-4">STATUS PROGRES → FINAL</th>
-                <th className="px-5 py-4 cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('aging')}>
+                <th className="px-5 py-4 text-center">NO. AWB & KLIEN</th>
+                <th className="px-5 py-4 text-center">EKSPEDISI & KASUS</th>
+                <th className="px-5 py-4 text-center">STATUS PROGRES → FINAL</th>
+                <th className="px-5 py-4 text-center cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('aging')}>
                   TIMELINE & AGING {sortConfig.key === 'aging' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-5 py-4 cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('nominal')}>
+                <th className="px-5 py-4 text-center cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('nominal')}>
                   NOMINAL CLAIM {sortConfig.key === 'nominal' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-5 py-4">KETERANGAN</th>
-                <th className="px-5 py-4 text-right">PIC STAFF</th>
+                <th className="px-5 py-4 text-center">KETERANGAN</th>
+                <th className="px-5 py-4 text-center">PIC STAFF</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -441,29 +462,29 @@ export default function TrackerKlaimDashboard() {
                 paginatedData.map((item) => {
                   const { tags, sisaTeks } = parseTagKeterangan(item.keterangan || '')
                   const isHighValue = item.nominal_claim > 200000
-                  const avatarInitial = item.pic_staff.substring(0, 2).toUpperCase()
+                  const avatarInitial = item.user.substring(0, 2).toUpperCase()
 
                   return (
-                    <tr key={item.id} className="hover:bg-zinc-50 transition group">
-                      <td className="px-5 py-4">
-                        <div className="font-black text-zinc-900 text-sm">{item.awb}</div>
-                        <div className="text-zinc-500 font-medium mt-0.5">{item.klien}</div>
+                    <tr key={item.id} className="hover:bg-zinc-50 transition group align-middle">
+                      <td className="px-5 py-4 text-center">
+                        <div className="font-black text-zinc-900 text-sm">{item.no_awb}</div>
+                        <div className="text-zinc-500 font-medium mt-0.5">{item.client_name}</div>
                       </td>
-                      <td className="px-5 py-4">
-                        <div className="font-bold text-zinc-800">{item.ekspedisi}</div>
-                        <div className="text-rose-600 font-bold text-[10px] uppercase tracking-wide mt-1">{item.kasus}</div>
+                      <td className="px-5 py-4 text-center">
+                        <div className="font-bold text-zinc-800">{item.jenis_ekspedisi}</div>
+                        <div className="text-rose-600 font-bold text-[10px] uppercase tracking-wide mt-1">{item.kategori_case}</div>
                       </td>
                       
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-zinc-500 font-medium">{item.status_progres}</span>
+                      <td className="px-5 py-4 text-center">
+                        <div className="inline-flex items-center justify-center gap-2">
+                          <span className="text-zinc-500 font-medium">{item.update_status}</span>
                           <span className="text-zinc-300">→</span>
-                          {item.status_final ? (
+                          {item.final_status ? (
                             <span className={`font-black ${
-                              item.status_final.toLowerCase().includes('approved') ? 'text-emerald-600' : 
-                              item.status_final.toLowerCase().includes('reject') || item.status_final.toLowerCase().includes('cancel') ? 'text-rose-600' : 'text-zinc-800'
+                              item.final_status.toLowerCase().includes('approved') ? 'text-emerald-600' : 
+                              item.final_status.toLowerCase().includes('reject') || item.final_status.toLowerCase().includes('cancel') ? 'text-rose-600' : 'text-zinc-800'
                             }`}>
-                              {item.status_final}
+                              {item.final_status}
                             </span>
                           ) : (
                             <span className="text-zinc-400 italic">Pengajuan Klaim</span>
@@ -471,16 +492,16 @@ export default function TrackerKlaimDashboard() {
                         </div>
                       </td>
 
-                      <td className="px-5 py-4 font-mono text-[11px] space-y-1">
-                        <div className="text-zinc-600 flex items-center gap-1">
+                      <td className="px-5 py-4 text-center font-mono text-[11px] space-y-1">
+                        <div className="text-zinc-600 flex items-center justify-center gap-1">
                           <span className="text-blue-500">📥</span> Masuk: {!isNaN(item.tglMasukObj.getTime()) ? item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'}) : '-'}
                         </div>
                         {item.isFinal && item.tglMutasiObj && !isNaN(item.tglMutasiObj.getTime()) && (
-                          <div className="text-zinc-600 flex items-center gap-1">
+                          <div className="text-zinc-600 flex items-center justify-center gap-1">
                             <span className="text-emerald-500">📤</span> Mutasi: {item.tglMutasiObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'})}
                           </div>
                         )}
-                        <div className={`inline-flex items-center gap-1 mt-1 font-extrabold ${
+                        <div className={`inline-flex items-center justify-center gap-1 mt-1 font-extrabold ${
                           item.isFinal ? 'text-emerald-600' :
                           item.agingStatus === 'red' ? 'text-rose-600' : 
                           item.agingStatus === 'yellow' ? 'text-amber-600' : 'text-emerald-600'
@@ -489,16 +510,16 @@ export default function TrackerKlaimDashboard() {
                         </div>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 text-center">
                         <div className={`font-mono ${isHighValue ? 'text-rose-600 font-black text-sm' : 'text-zinc-800 font-bold'}`}>
                           {formatRupiah(item.nominal_claim)}
                         </div>
                       </td>
 
-                      <td className="px-5 py-4 whitespace-normal max-w-[200px]">
-                        <div className="flex flex-col gap-1.5">
+                      <td className="px-5 py-4 text-center whitespace-normal max-w-[200px] mx-auto">
+                        <div className="flex flex-col items-center justify-center gap-1.5">
                           {tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap justify-center gap-1">
                               {tags.map((t, i) => (
                                 <span key={i} className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold">{t}</span>
                               ))}
@@ -509,10 +530,10 @@ export default function TrackerKlaimDashboard() {
                         </div>
                       </td>
 
-                      <td className="px-5 py-4 text-right">
-                        <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white border border-zinc-200 rounded-full shadow-2xs">
+                      <td className="px-5 py-4 text-center">
+                        <div className="inline-flex items-center justify-center gap-2 px-2.5 py-1 bg-white border border-zinc-200 rounded-full shadow-2xs mx-auto">
                           <span className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-[9px] font-black">{avatarInitial}</span>
-                          <span className="font-bold text-zinc-800">{item.pic_staff}</span>
+                          <span className="font-bold text-zinc-800">{item.user}</span>
                         </div>
                       </td>
                     </tr>
