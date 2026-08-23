@@ -50,6 +50,7 @@ export default function TrackerKlaimDashboard() {
 
   // Filters
   const [search, setSearch] = useState('')
+  const [filterBulan, setFilterBulan] = useState('All')
   const [filterEkspedisi, setFilterEkspedisi] = useState('All')
   const [filterKategori, setFilterKategori] = useState('All')
   const [filterPic, setFilterPic] = useState('All')
@@ -83,19 +84,21 @@ export default function TrackerKlaimDashboard() {
       const response = await fetch('https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec')
       const result = await response.json()
       
-      const mappedData: KlaimData[] = (result.data || result || []).map((item: any, index: number) => ({
-        id: item.id || String(index + 1),
-        awb: item.awb || item.NO_AWB || '-',
-        klien: item.klien || item.KLIEN || '-',
-        ekspedisi: item.ekspedisi || item.EKSPEDISI || '-',
-        kasus: item.kasus || item.KASUS || '-',
-        status_progres: item.status_progres || item.STATUS_PROGRES || '-',
-        status_final: item.status_final || item.STATUS_FINAL || null,
-        tgl_masuk: item.tgl_masuk || item.TGL_MASUK || new Date().toISOString(),
-        tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || null,
-        nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || 0),
-        keterangan: item.keterangan || item.KETERANGAN || '',
-        pic_staff: item.pic_staff || item.PIC_STAFF || 'Staff'
+      const rawArray = result.data || result.rows || result || []
+      
+      const mappedData: KlaimData[] = rawArray.map((item: any, index: number) => ({
+        id: String(item.id || item.ID || index + 1),
+        awb: String(item.awb || item.NO_AWB || item.No_AWB || item.resi || '-'),
+        klien: String(item.klien || item.KLIEN || item.nama_klien || '-'),
+        ekspedisi: String(item.ekspedisi || item.EKSPEDISI || '-'),
+        kasus: String(item.kasus || item.KASUS || item.kategori_kasus || '-'),
+        status_progres: String(item.status_progres || item.STATUS_PROGRES || item.status || '-'),
+        status_final: item.status_final || item.STATUS_FINAL || item.final_status || null,
+        tgl_masuk: String(item.tgl_masuk || item.TGL_MASUK || item.tanggal_masuk || new Date().toISOString()),
+        tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || item.tanggal_mutasi || null,
+        nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || item.nominal || 0),
+        keterangan: String(item.keterangan || item.KETERANGAN || ''),
+        pic_staff: String(item.pic_staff || item.PIC_STAFF || item.pic || 'Staff')
       }))
 
       setData(mappedData)
@@ -120,6 +123,21 @@ export default function TrackerKlaimDashboard() {
     fetchData()
   }, [])
 
+  // --- EXTRACT DYNAMIC MONTHS FROM DATA ---
+  const bulanList = useMemo(() => {
+    const monthsSet = new Set<string>()
+    data.forEach(item => {
+      if (item.tgl_masuk) {
+        const d = new Date(item.tgl_masuk)
+        if (!isNaN(d.getTime())) {
+          const monthYear = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+          monthsSet.add(monthYear)
+        }
+      }
+    })
+    return ['All', ...Array.from(monthsSet)]
+  }, [data])
+
   // --- DATA PROCESSING (AGING LOGIC) ---
   const processedData = useMemo(() => {
     const today = new Date()
@@ -139,9 +157,12 @@ export default function TrackerKlaimDashboard() {
 
       let agingStatus = 'green'
       if (agingDays >= 7 && agingDays <= 14) agingStatus = 'yellow'
-      if (agingDays > 14) agingStatus = 'red'
+      if (agingDays > 14) agingStatus.toString() === 'red'
 
-      return { ...item, agingDays, isFinal, agingStatus, tglMasukObj: tglMasuk, tglMutasiObj: item.tgl_mutasi ? new Date(item.tgl_mutasi) : null }
+      // Bulan format untuk filter
+      const bulanStr = !isNaN(tglMasuk.getTime()) ? tglMasuk.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : ''
+
+      return { ...item, agingDays, isFinal, agingStatus, bulanStr, tglMasukObj: tglMasuk, tglMutasiObj: item.tgl_mutasi ? new Date(item.tgl_mutasi) : null }
     })
   }, [data])
 
@@ -167,12 +188,13 @@ export default function TrackerKlaimDashboard() {
         d.keterangan.toLowerCase().includes(q)
       )
     }
-    if (filterEkspedisi !== 'All') result = result.filter(d => d.ekspedisi === filterEkspedisi)
-    if (filterKategori !== 'All') result = result.filter(d => d.kasus === filterKategori)
-    if (filterPic !== 'All') result = result.filter(d => d.pic_staff === filterPic)
+    if (filterBulan !== 'All') result = result.filter(d => d.bulanStr === filterBulan)
+    if (filterEkspedisi !== 'All') result = result.filter(d => d.ekspedisi.toLowerCase() === filterEkspedisi.toLowerCase())
+    if (filterKategori !== 'All') result = result.filter(d => d.kasus.toLowerCase() === filterKategori.toLowerCase())
+    if (filterPic !== 'All') result = result.filter(d => d.pic_staff.toLowerCase() === filterPic.toLowerCase())
     if (filterStatus !== 'All') {
       if (filterStatus === 'Open') result = result.filter(d => !d.isFinal)
-      else result = result.filter(d => d.status_final === filterStatus)
+      else result = result.filter(d => (d.status_final || '').toLowerCase() === filterStatus.toLowerCase())
     }
 
     if (sortConfig.key) {
@@ -188,7 +210,7 @@ export default function TrackerKlaimDashboard() {
     }
 
     return result
-  }, [processedData, search, filterEkspedisi, filterKategori, filterPic, filterStatus, sortConfig])
+  }, [processedData, search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, sortConfig])
 
   // --- SUMMARY STATS ---
   const stats = useMemo(() => {
@@ -241,7 +263,7 @@ export default function TrackerKlaimDashboard() {
     return filteredData.slice(start, start + itemsPerPage)
   }, [filteredData, currentPage, itemsPerPage])
 
-  useEffect(() => { setCurrentPage(1) }, [search, filterEkspedisi, filterKategori, filterPic, filterStatus])
+  useEffect(() => { setCurrentPage(1) }, [search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus])
 
   const handleSort = (key: 'aging' | 'nominal') => {
     setSortConfig(prev => ({
@@ -270,8 +292,9 @@ export default function TrackerKlaimDashboard() {
     document.body.removeChild(link)
   }
 
-  const ekspedisiList = ['All', 'J&T EXPRESS', 'NINJA EXPRESS', 'SHOPEE EXPRESS', 'SICEPAT']
-  const kategoriList = ['All', 'PAKET STUCK', 'RETUR BERMASALAH', 'BARANG HILANG']
+  // Dynamic lists from data
+  const ekspedisiList = ['All', ...Array.from(new Set(processedData.map(d => d.ekspedisi).filter(Boolean)))]
+  const kategoriList = ['All', ...Array.from(new Set(processedData.map(d => d.kasus).filter(Boolean)))]
   const finalStatusList = ['All', 'Open', 'Approved Claim', 'Cancel Claim', 'Reject Claim']
 
   return (
@@ -281,7 +304,7 @@ export default function TrackerKlaimDashboard() {
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900">Tracker & Monitoring Klaim</h1>
-          <p className="text-sm text-zinc-500 mt-1">Real-time synchronization data dari Google Sheets operasional klaim.</p>
+          <p className="text-sm text-zinc-500 mt-1">Dashboard Monitoring Operasional dan Resolusi Klaim.</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-zinc-600">
@@ -299,13 +322,13 @@ export default function TrackerKlaimDashboard() {
         </div>
       </div>
 
-      {/* KPI SUMMARY CARDS (TANPA PENJELASAN) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+      {/* KPI SUMMARY CARDS (4 DALAM 1 BARIS) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
         <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
           <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
           <div>
             <div className="text-xl font-black text-zinc-900">{stats.totalKasus.toLocaleString('id-ID')} Resi</div>
-            <div className="text-base font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.totalKasusNominal)}</div>
+            <div className="text-sm font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.totalKasusNominal)}</div>
           </div>
         </div>
 
@@ -313,23 +336,23 @@ export default function TrackerKlaimDashboard() {
           <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Pengajuan Klaim</span>
           <div>
             <div className="text-xl font-black text-zinc-900">{stats.pengajuanResi.toLocaleString('id-ID')} Resi</div>
-            <div className="text-base font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.pengajuanNominal)}</div>
+            <div className="text-sm font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.pengajuanNominal)}</div>
           </div>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex flex-col justify-between gap-2">
           <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Total Approved (Pencairan)</span>
           <div>
-            <div className="text-xl font-black text-emerald-600">{formatRupiah(stats.approvedNominal)}</div>
-            <div className="text-base font-bold text-emerald-700 mt-0.5">{stats.approvedResi.toLocaleString('id-ID')} Resi</div>
+            <div className="text-lg font-black text-emerald-600">{formatRupiah(stats.approvedNominal)}</div>
+            <div className="text-sm font-bold text-emerald-700 mt-0.5">{stats.approvedResi.toLocaleString('id-ID')} Resi</div>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col justify-between gap-2 md:col-span-3">
+        <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col justify-between gap-2">
           <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-wider">Cancel / Reject Claim</span>
           <div>
             <div className="text-xl font-black text-rose-600">{stats.cancelRejectResi.toLocaleString('id-ID')} Resi</div>
-            <div className="text-base font-bold text-rose-700 mt-0.5">{formatRupiah(stats.cancelRejectNominal)}</div>
+            <div className="text-sm font-bold text-rose-700 mt-0.5">{formatRupiah(stats.cancelRejectNominal)}</div>
           </div>
         </div>
       </div>
@@ -349,20 +372,23 @@ export default function TrackerKlaimDashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <select value={filterBulan} onChange={e => setFilterBulan(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
+              {bulanList.map(b => <option key={b} value={b}>{b === 'All' ? 'Semua Bulan' : b}</option>)}
+            </select>
             <select value={filterEkspedisi} onChange={e => setFilterEkspedisi(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              {ekspedisiList.map(e => <option key={e} value={e}>{e === 'All' ? 'Ekspedisi' : e}</option>)}
+              {ekspedisiList.map(e => <option key={e} value={e}>{e === 'All' ? 'Semua Ekspedisi' : e}</option>)}
             </select>
             <select value={filterKategori} onChange={e => setFilterKategori(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              {kategoriList.map(k => <option key={k} value={k}>{k === 'All' ? 'Kategori Case' : k}</option>)}
+              {kategoriList.map(k => <option key={k} value={k}>{k === 'All' ? 'Semua Kategori' : k}</option>)}
             </select>
             <select value={filterPic} onChange={e => setFilterPic(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              <option value="All">PIC Staff</option>
+              <option value="All">Semua PIC Staff</option>
               {Object.entries(picWorkload).map(([pic, count]) => (
                 <option key={pic} value={pic}>{pic} • {count}</option>
               ))}
             </select>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              {finalStatusList.map(s => <option key={s} value={s}>{s === 'All' ? 'Final Status' : s}</option>)}
+              {finalStatusList.map(s => <option key={s} value={s}>{s === 'All' ? 'Semua Status' : s}</option>)}
             </select>
             
             <button onClick={exportToCSV} className="ml-2 px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5">
@@ -372,14 +398,15 @@ export default function TrackerKlaimDashboard() {
         </div>
 
         {/* ACTIVE CHIPS */}
-        {(search || filterEkspedisi !== 'All' || filterKategori !== 'All' || filterPic !== 'All' || filterStatus !== 'All') && (
+        {(search || filterBulan !== 'All' || filterEkspedisi !== 'All' || filterKategori !== 'All' || filterPic !== 'All' || filterStatus !== 'All') && (
           <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-zinc-100">
+            {filterBulan !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Bulan: {filterBulan} <button onClick={() => setFilterBulan('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
             {filterEkspedisi !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Ekspedisi: {filterEkspedisi} <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
             {filterKategori !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Kategori: {filterKategori} <button onClick={() => setFilterKategori('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
             {filterPic !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">PIC: {filterPic} <button onClick={() => setFilterPic('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
             {filterStatus !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Status: {filterStatus} <button onClick={() => setFilterStatus('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
             
-            <button onClick={() => { setSearch(''); setFilterEkspedisi('All'); setFilterKategori('All'); setFilterPic('All'); setFilterStatus('All'); }} className="text-[11px] font-bold text-zinc-500 hover:text-zinc-900 underline ml-2 cursor-pointer">
+            <button onClick={() => { setSearch(''); setFilterBulan('All'); setFilterEkspedisi('All'); setFilterKategori('All'); setFilterPic('All'); setFilterStatus('All'); }} className="text-[11px] font-bold text-zinc-500 hover:text-zinc-900 underline ml-2 cursor-pointer">
               Hapus semua filter
             </button>
           </div>
@@ -433,8 +460,8 @@ export default function TrackerKlaimDashboard() {
                           <span className="text-zinc-300">→</span>
                           {item.status_final ? (
                             <span className={`font-black ${
-                              item.status_final.includes('Approved') ? 'text-emerald-600' : 
-                              item.status_final.includes('Reject') || item.status_final.includes('Cancel') ? 'text-rose-600' : 'text-zinc-800'
+                              item.status_final.toLowerCase().includes('approved') ? 'text-emerald-600' : 
+                              item.status_final.toLowerCase().includes('reject') || item.status_final.toLowerCase().includes('cancel') ? 'text-rose-600' : 'text-zinc-800'
                             }`}>
                               {item.status_final}
                             </span>
@@ -446,9 +473,9 @@ export default function TrackerKlaimDashboard() {
 
                       <td className="px-5 py-4 font-mono text-[11px] space-y-1">
                         <div className="text-zinc-600 flex items-center gap-1">
-                          <span className="text-blue-500">📥</span> Masuk: {item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'})}
+                          <span className="text-blue-500">📥</span> Masuk: {!isNaN(item.tglMasukObj.getTime()) ? item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'}) : '-'}
                         </div>
-                        {item.isFinal && item.tglMutasiObj && (
+                        {item.isFinal && item.tglMutasiObj && !isNaN(item.tglMutasiObj.getTime()) && (
                           <div className="text-zinc-600 flex items-center gap-1">
                             <span className="text-emerald-500">📤</span> Mutasi: {item.tglMutasiObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'})}
                           </div>
