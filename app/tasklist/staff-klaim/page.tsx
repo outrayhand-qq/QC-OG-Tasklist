@@ -21,7 +21,7 @@ type KlaimData = {
   sla: string
 }
 
-// --- HELPER FUNCTIONS (hanya yang sudah ada) ---
+// --- HELPER FUNCTIONS ---
 const parseTagKeterangan = (text: string) => {
   const tags = []
   const lowerText = text.toLowerCase()
@@ -73,9 +73,10 @@ export default function TrackerKlaimDashboard() {
       return
     }
 
-    const allowedRoles = ['superadmin', 'tlqc', 'staff_klaim', 'staffklaim']
+    // Hanya superadmin dan tlqc yang boleh akses halaman ini
+    const allowedRoles = ['superadmin', 'tlqc']
     if (role && !allowedRoles.includes(role)) {
-      alert('Akses ditolak. Halaman Tracker Klaim khusus untuk Superadmin, TL QC, dan Staff Klaim.')
+      alert('Akses ditolak. Halaman ini hanya untuk Superadmin dan TL QC.')
       router.push('/')
     }
   }, [router])
@@ -86,24 +87,84 @@ export default function TrackerKlaimDashboard() {
       const response = await fetch('https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec')
       const result = await response.json()
       
-      const rawArray = result.data || result.rows || result || []
+      let rawArray = result.data || result.rows || result || []
       
-      const mappedData: KlaimData[] = rawArray.map((item: any, index: number) => ({
-        id: String(item.id || item.ID || index + 1),
-        user: String(item.user || item.USER || item.pic_staff || 'Staff'),
-        jenis_ekspedisi: String(item.jenis_ekspedisi || item.JENIS_EKSPEDISI || item.ekspedisi || '-'),
-        date_added: String(item.date_added || item.DATE_ADDED || item.tgl_masuk || new Date().toISOString()),
-        bulan: String(item.bulan || item.BULAN || ''), // nilai asli dari GSheets
-        client_name: String(item.client_name || item.CLIENT_NAME || item.klien || '-'),
-        no_awb: String(item.no_awb || item.NO_AWB || item.awb || '-'),
-        kategori_case: String(item.kategori_case || item.KATEGORI_CASE || item.kasus || '-'),
-        update_status: String(item.update_status || item.UPDATE_STATUS || item.status_progres || '-'),
-        final_status: item.final_status || item.FINAL_STATUS || item.status_final || null,
-        keterangan: String(item.keterangan || item.KETERANGAN || ''),
-        tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || null,
-        nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || 0),
-        sla: String(item.sla || item.SLA || '-')
-      }))
+      // Jika rawArray bukan array, coba ambil properti yang berisi array
+      if (!Array.isArray(rawArray)) {
+        const possibleArrays = Object.values(result).filter(v => Array.isArray(v))
+        if (possibleArrays.length > 0) rawArray = possibleArrays[0]
+        else rawArray = []
+      }
+
+      // Deteksi apakah data berupa array of arrays atau array of objects
+      const isArrayOfArrays = rawArray.length > 0 && Array.isArray(rawArray[0])
+
+      let mappedData: KlaimData[] = []
+
+      if (isArrayOfArrays) {
+        // Struktur kolom sesuai GSheets (0-based index):
+        // 0: user, 1: jenis_ekspedisi, 2: date_added, 3: bulan, 4: client_name,
+        // 5: no_awb, 6: kategori_case, 7: update_status, 8: final_status,
+        // 9: keterangan, 10: tgl_mutasi, 11: nominal_claim, 12: sla
+        const col = {
+          user: 0,
+          jenis_ekspedisi: 1,
+          date_added: 2,
+          bulan: 3,
+          client_name: 4,
+          no_awb: 5,
+          kategori_case: 6,
+          update_status: 7,
+          final_status: 8,
+          keterangan: 9,
+          tgl_mutasi: 10,
+          nominal_claim: 11,
+          sla: 12
+        }
+
+        // Cek header (jika baris pertama berisi kata 'bulan')
+        const firstRow = rawArray[0]
+        const isHeader = firstRow.some((cell: any) => typeof cell === 'string' && cell.toLowerCase().includes('bulan'))
+        const dataRows = isHeader ? rawArray.slice(1) : rawArray
+
+        mappedData = dataRows.map((row: any[], index: number) => ({
+          id: String(row[0] || index + 1),
+          user: String(row[col.user] || 'Staff'),
+          jenis_ekspedisi: String(row[col.jenis_ekspedisi] || '-'),
+          date_added: String(row[col.date_added] || new Date().toISOString()),
+          bulan: String(row[col.bulan] || '').trim(),  // PERBAIKAN: Trim dan ambil nilai asli
+          client_name: String(row[col.client_name] || '-'),
+          no_awb: String(row[col.no_awb] || '-'),
+          kategori_case: String(row[col.kategori_case] || '-'),
+          update_status: String(row[col.update_status] || '-'),
+          final_status: row[col.final_status] || null,
+          keterangan: String(row[col.keterangan] || ''),
+          tgl_mutasi: row[col.tgl_mutasi] || null,
+          nominal_claim: Number(row[col.nominal_claim] || 0),
+          sla: String(row[col.sla] || '-')
+        }))
+      } else {
+        // Data berupa array of objects
+        mappedData = rawArray.map((item: any, index: number) => ({
+          id: String(item.id || item.ID || index + 1),
+          user: String(item.user || item.USER || item.pic_staff || 'Staff'),
+          jenis_ekspedisi: String(item.jenis_ekspedisi || item.JENIS_EKSPEDISI || item.ekspedisi || '-'),
+          date_added: String(item.date_added || item.DATE_ADDED || item.tgl_masuk || new Date().toISOString()),
+          bulan: String(item.bulan || item.BULAN || '').trim(),  // PERBAIKAN: Trim dan ambil nilai asli
+          client_name: String(item.client_name || item.CLIENT_NAME || item.klien || '-'),
+          no_awb: String(item.no_awb || item.NO_AWB || item.awb || '-'),
+          kategori_case: String(item.kategori_case || item.KATEGORI_CASE || item.kasus || '-'),
+          update_status: String(item.update_status || item.UPDATE_STATUS || item.status_progres || '-'),
+          final_status: item.final_status || item.FINAL_STATUS || item.status_final || null,
+          keterangan: String(item.keterangan || item.KETERANGAN || ''),
+          tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || null,
+          nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || 0),
+          sla: String(item.sla || item.SLA || '-')
+        }))
+      }
+
+      // Debug log untuk memastikan data bulan benar
+      console.log('Sample bulan values:', mappedData.slice(0, 10).map(d => d.bulan))
 
       setData(mappedData)
       
@@ -131,14 +192,41 @@ export default function TrackerKlaimDashboard() {
   const bulanList = useMemo(() => {
     const setBulan = new Set<string>()
     data.forEach(d => {
-      const bulan = d.bulan.trim()
-      if (bulan === '') {
+      // Pastikan kita ambil nilai bulan apa adanya dari data
+      let bulanValue = d.bulan ? d.bulan.trim() : ''
+      
+      // Jika bulan kosong atau hanya spasi
+      if (bulanValue === '' || bulanValue === '-' || bulanValue.toLowerCase() === 'null') {
         setBulan.add('(Tanpa Bulan)')
       } else {
-        setBulan.add(bulan)
+        // Tambahkan nilai bulan apa adanya (termasuk tahun)
+        setBulan.add(bulanValue)
       }
     })
-    return ['All', ...Array.from(setBulan)]
+    
+    // Sort bulan dengan benar (All di awal, lalu sisanya sorted)
+    const allBulan = Array.from(setBulan)
+    const sortedBulan = allBulan.filter(b => b !== 'All' && b !== '(Tanpa Bulan)').sort((a, b) => {
+      // Parse bulan untuk sorting yang lebih baik
+      const parseBulan = (bulanStr: string) => {
+        const parts = bulanStr.split(' ')
+        const bulanName = parts[0]
+        const tahun = parts[1] || '0000'
+        
+        const bulanMap: Record<string, number> = {
+          'Januari': 1, 'Februari': 2, 'Maret': 3, 'April': 4,
+          'Mei': 5, 'Juni': 6, 'Juli': 7, 'Agustus': 8,
+          'September': 9, 'Oktober': 10, 'November': 11, 'Desember': 12
+        }
+        
+        const bulanNum = bulanMap[bulanName] || 0
+        return `${tahun}-${String(bulanNum).padStart(2, '0')}`
+      }
+      
+      return parseBulan(a).localeCompare(parseBulan(b))
+    })
+    
+    return ['All', '(Tanpa Bulan)', ...sortedBulan]
   }, [data])
 
   const ekspedisiList = useMemo(() => {
@@ -209,14 +297,20 @@ export default function TrackerKlaimDashboard() {
         d.keterangan.toLowerCase().includes(q)
       )
     }
+    
     if (filterBulan !== 'All') {
       result = result.filter(d => {
+        const dataBulan = d.bulan ? d.bulan.trim() : ''
+        
         if (filterBulan === '(Tanpa Bulan)') {
-          return d.bulan.trim() === ''
+          return dataBulan === '' || dataBulan === '-' || dataBulan.toLowerCase() === 'null'
         }
-        return d.bulan.trim().toLowerCase() === filterBulan.toLowerCase()
+        
+        // Compare full string (case insensitive) - PERBAIKAN UTAMA
+        return dataBulan.toLowerCase() === filterBulan.toLowerCase()
       })
     }
+    
     if (filterEkspedisi !== 'All') {
       result = result.filter(d => d.jenis_ekspedisi.toLowerCase() === filterEkspedisi.toLowerCase())
     }
@@ -307,12 +401,12 @@ export default function TrackerKlaimDashboard() {
 
   const exportToCSV = () => {
     if (filteredData.length === 0) return
-    const headers = ['AWB', 'KLIEN', 'EKSPEDISI', 'KASUS', 'STATUS PROGRES', 'STATUS FINAL', 'TGL MASUK', 'TGL MUTASI', 'AGING (HARI)', 'NOMINAL CLAIM', 'KETERANGAN', 'PIC STAFF']
+    const headers = ['AWB', 'KLIEN', 'EKSPEDISI', 'KASUS', 'STATUS PROGRES', 'STATUS FINAL', 'TGL MASUK', 'TGL MUTASI', 'AGING (HARI)', 'NOMINAL CLAIM', 'KETERANGAN', 'PIC STAFF', 'BULAN']
     const csvContent = [
       headers.join(','),
       ...filteredData.map(d => [
         d.no_awb, `"${d.client_name}"`, d.jenis_ekspedisi, d.kategori_case, d.update_status, d.final_status || '', 
-        d.date_added, d.tgl_mutasi || '', d.agingDays, d.nominal_claim, `"${d.keterangan.replace(/"/g, '""')}"`, d.user
+        d.date_added, d.tgl_mutasi || '', d.agingDays, d.nominal_claim, `"${d.keterangan.replace(/"/g, '""')}"`, d.user, d.bulan
       ].join(','))
     ].join('\n')
 
@@ -427,7 +521,7 @@ export default function TrackerKlaimDashboard() {
             </select>
             
             <button onClick={exportToCSV} className="ml-2 px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5">
-              ⤓ Export CSV
+               Export CSV
             </button>
           </div>
         </div>
