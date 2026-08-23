@@ -50,7 +50,6 @@ export default function TrackerKlaimDashboard() {
 
   // Filters
   const [search, setSearch] = useState('')
-  const [filterBulan, setFilterBulan] = useState('All')
   const [filterEkspedisi, setFilterEkspedisi] = useState('All')
   const [filterKategori, setFilterKategori] = useState('All')
   const [filterPic, setFilterPic] = useState('All')
@@ -61,15 +60,29 @@ export default function TrackerKlaimDashboard() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(50)
 
-  // --- FETCH REAL DATA FROM APPS SCRIPT / API ---
+  // --- ACCESS CONTROL & FETCH ---
+  useEffect(() => {
+    const isLogged = localStorage.getItem('isLoggedIn')
+    const role = (localStorage.getItem('userRole') || '').toLowerCase().trim()
+    
+    if (!isLogged) {
+      router.push('/')
+      return
+    }
+
+    const allowedRoles = ['superadmin', 'tlqc', 'staff_klaim', 'staffklaim']
+    if (role && !allowedRoles.includes(role)) {
+      alert('Akses ditolak. Halaman Tracker Klaim khusus untuk Superadmin, TL QC, dan Staff Klaim.')
+      router.push('/')
+    }
+  }, [router])
+
   const fetchData = async () => {
     setSyncInfo(prev => ({ ...prev, status: 'loading' }))
     try {
-      // Ganti URL di bawah dengan Endpoint Apps Script / API Real Anda
       const response = await fetch('https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec')
       const result = await response.json()
       
-      // Mapping data agar sesuai dengan struktur type KlaimData
       const mappedData: KlaimData[] = (result.data || result || []).map((item: any, index: number) => ({
         id: item.id || String(index + 1),
         awb: item.awb || item.NO_AWB || '-',
@@ -101,23 +114,11 @@ export default function TrackerKlaimDashboard() {
     }
   }
 
-useEffect(() => {
-    const isLogged = localStorage.getItem('isLoggedIn')
-    const role = (localStorage.getItem('userRole') || '').toLowerCase().trim()
-    
-    if (!isLogged) {
-      router.push('/')
-      return
-    }
-
-    // Role yang diizinkan: Superadmin, TL QC, dan Staff Klaim (TL OG tidak boleh)
-    const allowedRoles = ['superadmin', 'tlqc', 'staff_klaim', 'staffklaim']
-    
-    if (role && !allowedRoles.includes(role)) {
-      alert('Akses ditolak. Halaman Tracker Klaim khusus untuk Superadmin, TL QC, dan Staff Klaim.')
-      router.push('/') // Mengarahkan kembali jika tidak punya akses
-    }
-  }, [router])
+  useEffect(() => {
+    const savedTime = localStorage.getItem('lastKlaimSync')
+    if (savedTime) setSyncInfo({ time: savedTime, status: 'idle' })
+    fetchData()
+  }, [])
 
   // --- DATA PROCESSING (AGING LOGIC) ---
   const processedData = useMemo(() => {
@@ -174,7 +175,6 @@ useEffect(() => {
       else result = result.filter(d => d.status_final === filterStatus)
     }
 
-    // --- SORTING ---
     if (sortConfig.key) {
       result.sort((a, b) => {
         if (sortConfig.key === 'aging') {
@@ -249,7 +249,6 @@ useEffect(() => {
     }))
   }
 
-  // --- EXPORT CSV ---
   const exportToCSV = () => {
     if (filteredData.length === 0) return
     const headers = ['AWB', 'KLIEN', 'EKSPEDISI', 'KASUS', 'STATUS PROGRES', 'STATUS FINAL', 'TGL MASUK', 'TGL MUTASI', 'AGING (HARI)', 'NOMINAL CLAIM', 'KETERANGAN', 'PIC STAFF']
@@ -300,53 +299,39 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* SUMMARY CARDS */}
+      {/* KPI SUMMARY CARDS (TANPA PENJELASAN) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-        
-        {/* Card 1: Total Kasus Klaim */}
-        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
-          <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">Total Kasus Klaim</span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-black text-zinc-900">{stats.totalKasus.toLocaleString('id-ID')} Resi</span>
-            <span className="text-xs font-bold text-zinc-400">|</span>
-            <span className="text-sm font-bold text-zinc-700">{formatRupiah(stats.totalKasusNominal)}</span>
+        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
+          <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
+          <div>
+            <div className="text-xl font-black text-zinc-900">{stats.totalKasus.toLocaleString('id-ID')} Resi</div>
+            <div className="text-base font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.totalKasusNominal)}</div>
           </div>
-          <span className="text-[10px] text-zinc-400 mt-2">↳ Akumulasi Keseluruhan Kasus Klaim</span>
         </div>
 
-        {/* Card 2: Total Pengajuan Klaim */}
-        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
-          <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">Total Pengajuan Klaim</span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-black text-zinc-900">{stats.pengajuanResi.toLocaleString('id-ID')} Resi</span>
-            <span className="text-xs font-bold text-zinc-400">|</span>
-            <span className="text-sm font-bold text-zinc-700">{formatRupiah(stats.pengajuanNominal)}</span>
+        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
+          <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Pengajuan Klaim</span>
+          <div>
+            <div className="text-xl font-black text-zinc-900">{stats.pengajuanResi.toLocaleString('id-ID')} Resi</div>
+            <div className="text-base font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.pengajuanNominal)}</div>
           </div>
-          <span className="text-[10px] text-zinc-400 mt-2">↳ Kasus Klaim Yang sedang dalam proses pengajuan.</span>
         </div>
 
-        {/* Card 3: Total Approved */}
-        <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
+        <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex flex-col justify-between gap-2">
           <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Total Approved (Pencairan)</span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-black text-emerald-600">{formatRupiah(stats.approvedNominal)}</span>
-            <span className="text-xs font-bold text-emerald-400">|</span>
-            <span className="text-sm font-bold text-emerald-700">{stats.approvedResi.toLocaleString('id-ID')} Resi</span>
+          <div>
+            <div className="text-xl font-black text-emerald-600">{formatRupiah(stats.approvedNominal)}</div>
+            <div className="text-base font-bold text-emerald-700 mt-0.5">{stats.approvedResi.toLocaleString('id-ID')} Resi</div>
           </div>
-          <span className="text-[10px] text-emerald-500/70 mt-2">↳ Nominal dana yang diterima.</span>
         </div>
 
-        {/* Card 4: Cancel / Reject Claim */}
-        <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col gap-1 relative overflow-hidden md:col-span-3">
+        <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col justify-between gap-2 md:col-span-3">
           <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-wider">Cancel / Reject Claim</span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-black text-rose-600">{stats.cancelRejectResi.toLocaleString('id-ID')} Resi</span>
-            <span className="text-xs font-bold text-rose-400">|</span>
-            <span className="text-sm font-bold text-rose-700">{formatRupiah(stats.cancelRejectNominal)}</span>
+          <div>
+            <div className="text-xl font-black text-rose-600">{stats.cancelRejectResi.toLocaleString('id-ID')} Resi</div>
+            <div className="text-base font-bold text-rose-700 mt-0.5">{formatRupiah(stats.cancelRejectNominal)}</div>
           </div>
-          <span className="text-[10px] text-rose-500/70 mt-2">↳ Klaim ditolak atau hangus.</span>
         </div>
-
       </div>
 
       {/* TOOLBAR & FILTERS */}
@@ -454,7 +439,7 @@ useEffect(() => {
                               {item.status_final}
                             </span>
                           ) : (
-                            <span className="text-zinc-400 italic">Belum Final</span>
+                            <span className="text-zinc-400 italic">Pengajuan Klaim</span>
                           )}
                         </div>
                       </td>
@@ -473,7 +458,7 @@ useEffect(() => {
                           item.agingStatus === 'red' ? 'text-rose-600' : 
                           item.agingStatus === 'yellow' ? 'text-amber-600' : 'text-emerald-600'
                         }`}>
-                          {item.isFinal ? `✓ Selesai ${item.agingDays} hari` : `⏳ ${item.agingDays} hari - belum final`}
+                          {item.isFinal ? `✓ Selesai ${item.agingDays} Hari` : `⏳ Pengajuan Klaim (Hari Ke ${item.agingDays})`}
                         </div>
                       </td>
 
