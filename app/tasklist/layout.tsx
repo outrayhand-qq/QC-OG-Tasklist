@@ -107,34 +107,34 @@ export default function TaskListLayout({
               </div>
             )}
 
-            {/* MENU RESOLUSI & KENDALA KHUSUS SUPERADMIN */}
-            {isSuperAdmin && (
-              <div className="space-y-2">
-                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block px-2">
-                  Resolusi & Kendala
-                </span>
-                <div className="space-y-0.5">
-                  <Link
-                    href="/log-komplain"
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition"
-                  >
-                    <span>💬</span>
-                    <span>Log Komplain Harian</span>
-                  </Link>
-                  <Link
-                    href="/tasklist/staff-klaim"
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition ${
-                      pathname === '/tasklist/staff-klaim'
-                        ? 'bg-black text-white font-bold'
-                        : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
-                    }`}
-                  >
-                    <span>🛡️</span>
-                    <span>Tracker Klaim</span>
-                  </Link>
-                </div>
-              </div>
-            )}
+ {/* MENU RESOLUSI & KENDALA - SUPERADMIN & TLQC */}
+{(isSuperAdmin || userRole === 'tlqc') && (
+  <div className="space-y-2">
+    <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block px-2">
+      Resolusi & Kendala
+    </span>
+    <div className="space-y-0.5">
+      <Link
+        href="/log-komplain"
+        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition"
+      >
+        <span>💬</span>
+        <span>Log Komplain Harian</span>
+      </Link>
+      <Link
+        href="/tasklist/staff-klaim"
+        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition ${
+          pathname === '/tasklist/staff-klaim'
+            ? 'bg-black text-white font-bold'
+            : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+        }`}
+      >
+        <span>🛡️</span>
+        <span>Tracker Klaim</span>
+      </Link>
+    </div>
+  </div>
+)}
 
           </nav>
         </div>
