@@ -23,7 +23,7 @@ type KlaimData = {
 
 // --- HELPER FUNCTIONS ---
 const parseTagKeterangan = (text: string) => {
-  const tags = []
+  const tags: string[] = []
   const lowerText = text.toLowerCase()
   if (lowerText.includes('rentan bocor')) tags.push('Barang Rentan Bocor')
   if (lowerText.includes('clear case') || lowerText.includes('fisik datang')) tags.push('Fisik Datang ke Gudang')
@@ -63,7 +63,7 @@ export default function TrackerKlaimDashboard() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(50)
 
-  // --- ACCESS CONTROL & FETCH ---
+  // --- ACCESS CONTROL ---
   useEffect(() => {
     const isLogged = localStorage.getItem('isLoggedIn')
     const role = (localStorage.getItem('userRole') || '').toLowerCase().trim()
@@ -73,7 +73,6 @@ export default function TrackerKlaimDashboard() {
       return
     }
 
-    // Hanya superadmin dan tlqc yang boleh akses halaman ini
     const allowedRoles = ['superadmin', 'tlqc']
     if (role && !allowedRoles.includes(role)) {
       alert('Akses ditolak. Halaman ini hanya untuk Superadmin dan TL QC.')
@@ -85,86 +84,129 @@ export default function TrackerKlaimDashboard() {
     setSyncInfo(prev => ({ ...prev, status: 'loading' }))
     try {
       const response = await fetch('https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec')
-      const result = await response.json()
+      const result: any = await response.json()
       
-      let rawArray = result.data || result.rows || result || []
+      console.log('🔍 RAW API RESPONSE:', result)
       
-      // Jika rawArray bukan array, coba ambil properti yang berisi array
+      let rawArray: any = result.data || result.rows || result || []
+      
       if (!Array.isArray(rawArray)) {
-        const possibleArrays = Object.values(result).filter(v => Array.isArray(v))
+        const possibleArrays = Object.values(result).filter((v: any) => Array.isArray(v))
         if (possibleArrays.length > 0) rawArray = possibleArrays[0]
         else rawArray = []
       }
 
-      // Deteksi apakah data berupa array of arrays atau array of objects
-      const isArrayOfArrays = rawArray.length > 0 && Array.isArray(rawArray[0])
+      console.log('🔍 RAW ARRAY LENGTH:', rawArray.length)
+      console.log(' FIRST ROW:', rawArray[0])
+      console.log('🔍 IS ARRAY OF ARRAYS:', rawArray.length > 0 && Array.isArray(rawArray[0]))
 
+      const isArrayOfArrays = rawArray.length > 0 && Array.isArray(rawArray[0])
       let mappedData: KlaimData[] = []
 
       if (isArrayOfArrays) {
-        // Struktur kolom sesuai GSheets (0-based index):
-        // 0: user, 1: jenis_ekspedisi, 2: date_added, 3: bulan, 4: client_name,
-        // 5: no_awb, 6: kategori_case, 7: update_status, 8: final_status,
-        // 9: keterangan, 10: tgl_mutasi, 11: nominal_claim, 12: sla
-        const col = {
-          user: 0,
-          jenis_ekspedisi: 1,
-          date_added: 2,
-          bulan: 3,
-          client_name: 4,
-          no_awb: 5,
-          kategori_case: 6,
-          update_status: 7,
-          final_status: 8,
-          keterangan: 9,
-          tgl_mutasi: 10,
-          nominal_claim: 11,
-          sla: 12
+        // Deteksi header untuk mapping kolom yang dinamis
+        const firstRow = rawArray[0]
+        const headerRow: string[] = []
+        
+        // Cek apakah baris pertama adalah header
+        const isHeader = firstRow.some((cell: any) => {
+          const cellStr = String(cell).toLowerCase().trim()
+          return cellStr.includes('bulan') || cellStr.includes('user') || cellStr.includes('ekspedisi')
+        })
+
+        let dataRows = rawArray
+        let colIndex: { [key: string]: number } = {}
+
+        if (isHeader) {
+          // Buat mapping kolom dari header
+          firstRow.forEach((cell: any, idx: number) => {
+            const colName = String(cell).toLowerCase().trim()
+            colIndex[colName] = idx
+          })
+          
+          console.log('🔍 COLUMN MAPPING:', colIndex)
+          console.log(' Index kolom "bulan":', colIndex['bulan'])
+          
+          dataRows = rawArray.slice(1)
+        } else {
+          // Fallback ke mapping manual jika tidak ada header
+          colIndex = {
+            'user': 0,
+            'jenis_ekspedisi': 1,
+            'date_added': 2,
+            'bulan': 3,
+            'client_name': 4,
+            'no_awb': 5,
+            'kategori_case': 6,
+            'update_status': 7,
+            'final_status': 8,
+            'keterangan': 9,
+            'tgl_mutasi': 10,
+            'nominal_claim': 11,
+            'sla': 12
+          }
         }
 
-        // Cek header (jika baris pertama berisi kata 'bulan')
-        const firstRow = rawArray[0]
-        const isHeader = firstRow.some((cell: any) => typeof cell === 'string' && cell.toLowerCase().includes('bulan'))
-        const dataRows = isHeader ? rawArray.slice(1) : rawArray
-
-        mappedData = dataRows.map((row: any[], index: number) => ({
-          id: String(row[0] || index + 1),
-          user: String(row[col.user] || 'Staff'),
-          jenis_ekspedisi: String(row[col.jenis_ekspedisi] || '-'),
-          date_added: String(row[col.date_added] || new Date().toISOString()),
-          bulan: String(row[col.bulan] || '').trim(),  // PERBAIKAN: Trim dan ambil nilai asli
-          client_name: String(row[col.client_name] || '-'),
-          no_awb: String(row[col.no_awb] || '-'),
-          kategori_case: String(row[col.kategori_case] || '-'),
-          update_status: String(row[col.update_status] || '-'),
-          final_status: row[col.final_status] || null,
-          keterangan: String(row[col.keterangan] || ''),
-          tgl_mutasi: row[col.tgl_mutasi] || null,
-          nominal_claim: Number(row[col.nominal_claim] || 0),
-          sla: String(row[col.sla] || '-')
-        }))
+        // Ambil index kolom bulan
+        const bulanIdx = colIndex['bulan'] !== undefined ? colIndex['bulan'] : 3
+        
+        mappedData = dataRows.map((row: any[], index: number) => {
+          const bulanRaw = row[bulanIdx]
+          const bulanStr = String(bulanRaw || '').trim()
+          
+          // Log beberapa baris pertama untuk debugging
+          if (index < 5) {
+            console.log(`🔍 Row ${index} - Bulan raw:`, bulanRaw, '| Bulan string:', bulanStr, '| Type:', typeof bulanRaw)
+          }
+          
+          return {
+            id: String(row[0] || index + 1),
+            user: String(row[colIndex['user'] ?? 0] || 'Staff'),
+            jenis_ekspedisi: String(row[colIndex['jenis_ekspedisi'] ?? 1] || '-'),
+            date_added: String(row[colIndex['date_added'] ?? 2] || new Date().toISOString()),
+            bulan: bulanStr,
+            client_name: String(row[colIndex['client_name'] ?? 4] || '-'),
+            no_awb: String(row[colIndex['no_awb'] ?? 5] || '-'),
+            kategori_case: String(row[colIndex['kategori_case'] ?? 6] || '-'),
+            update_status: String(row[colIndex['update_status'] ?? 7] || '-'),
+            final_status: row[colIndex['final_status'] ?? 8] || null,
+            keterangan: String(row[colIndex['keterangan'] ?? 9] || ''),
+            tgl_mutasi: row[colIndex['tgl_mutasi'] ?? 10] || null,
+            nominal_claim: Number(row[colIndex['nominal_claim'] ?? 11] || 0),
+            sla: String(row[colIndex['sla'] ?? 12] || '-')
+          }
+        })
       } else {
         // Data berupa array of objects
-        mappedData = rawArray.map((item: any, index: number) => ({
-          id: String(item.id || item.ID || index + 1),
-          user: String(item.user || item.USER || item.pic_staff || 'Staff'),
-          jenis_ekspedisi: String(item.jenis_ekspedisi || item.JENIS_EKSPEDISI || item.ekspedisi || '-'),
-          date_added: String(item.date_added || item.DATE_ADDED || item.tgl_masuk || new Date().toISOString()),
-          bulan: String(item.bulan || item.BULAN || '').trim(),  // PERBAIKAN: Trim dan ambil nilai asli
-          client_name: String(item.client_name || item.CLIENT_NAME || item.klien || '-'),
-          no_awb: String(item.no_awb || item.NO_AWB || item.awb || '-'),
-          kategori_case: String(item.kategori_case || item.KATEGORI_CASE || item.kasus || '-'),
-          update_status: String(item.update_status || item.UPDATE_STATUS || item.status_progres || '-'),
-          final_status: item.final_status || item.FINAL_STATUS || item.status_final || null,
-          keterangan: String(item.keterangan || item.KETERANGAN || ''),
-          tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || null,
-          nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || 0),
-          sla: String(item.sla || item.SLA || '-')
-        }))
+        mappedData = rawArray.map((item: any, index: number) => {
+          const bulanStr = String(item.bulan || item.BULAN || '').trim()
+          
+          if (index < 5) {
+            console.log(`🔍 Object Row ${index} - Bulan:`, bulanStr)
+          }
+          
+          return {
+            id: String(item.id || item.ID || index + 1),
+            user: String(item.user || item.USER || item.pic_staff || 'Staff'),
+            jenis_ekspedisi: String(item.jenis_ekspedisi || item.JENIS_EKSPEDISI || item.ekspedisi || '-'),
+            date_added: String(item.date_added || item.DATE_ADDED || item.tgl_masuk || new Date().toISOString()),
+            bulan: bulanStr,
+            client_name: String(item.client_name || item.CLIENT_NAME || item.klien || '-'),
+            no_awb: String(item.no_awb || item.NO_AWB || item.awb || '-'),
+            kategori_case: String(item.kategori_case || item.KATEGORI_CASE || item.kasus || '-'),
+            update_status: String(item.update_status || item.UPDATE_STATUS || item.status_progres || '-'),
+            final_status: item.final_status || item.FINAL_STATUS || item.status_final || null,
+            keterangan: String(item.keterangan || item.KETERANGAN || ''),
+            tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || null,
+            nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || 0),
+            sla: String(item.sla || item.SLA || '-')
+          }
+        })
       }
 
-      // Debug log untuk memastikan data bulan benar
-      console.log('Sample bulan values:', mappedData.slice(0, 10).map(d => d.bulan))
+      // Debug: Tampilkan semua unique bulan values
+      const uniqueBulan = [...new Set(mappedData.map(d => d.bulan).filter(Boolean))]
+      console.log('✅ UNIQUE BULAN VALUES (Total:', uniqueBulan.length, '):', uniqueBulan)
 
       setData(mappedData)
       
@@ -175,7 +217,7 @@ export default function TrackerKlaimDashboard() {
       setSyncInfo({ time: timeStr, status: 'success' })
       localStorage.setItem('lastKlaimSync', timeStr)
     } catch (err) {
-      console.error('Gagal mengambil data real:', err)
+      console.error('❌ Gagal mengambil data:', err)
       setSyncInfo(prev => ({ ...prev, status: 'error' }))
     } finally {
       setLoading(false)
@@ -191,23 +233,24 @@ export default function TrackerKlaimDashboard() {
   // --- DYNAMIC FILTER LISTS ---
   const bulanList = useMemo(() => {
     const setBulan = new Set<string>()
+    
     data.forEach(d => {
-      // Pastikan kita ambil nilai bulan apa adanya dari data
-      let bulanValue = d.bulan ? d.bulan.trim() : ''
+      const bulanValue = d.bulan ? d.bulan.trim() : ''
       
-      // Jika bulan kosong atau hanya spasi
       if (bulanValue === '' || bulanValue === '-' || bulanValue.toLowerCase() === 'null') {
         setBulan.add('(Tanpa Bulan)')
       } else {
-        // Tambahkan nilai bulan apa adanya (termasuk tahun)
+        // Simpan nilai bulan APA ADANYA dari data
         setBulan.add(bulanValue)
       }
     })
     
-    // Sort bulan dengan benar (All di awal, lalu sisanya sorted)
     const allBulan = Array.from(setBulan)
-    const sortedBulan = allBulan.filter(b => b !== 'All' && b !== '(Tanpa Bulan)').sort((a, b) => {
-      // Parse bulan untuk sorting yang lebih baik
+    
+    // Sort: pisahkan "(Tanpa Bulan)", lalu sort sisanya
+    const tanpaBulan = allBulan.filter(b => b === '(Tanpa Bulan)')
+    const withBulan = allBulan.filter(b => b !== '(Tanpa Bulan)').sort((a, b) => {
+      // Parse untuk sorting yang lebih baik (YYYY-MM)
       const parseBulan = (bulanStr: string) => {
         const parts = bulanStr.split(' ')
         const bulanName = parts[0]
@@ -226,7 +269,7 @@ export default function TrackerKlaimDashboard() {
       return parseBulan(a).localeCompare(parseBulan(b))
     })
     
-    return ['All', '(Tanpa Bulan)', ...sortedBulan]
+    return ['All', ...tanpaBulan, ...withBulan]
   }, [data])
 
   const ekspedisiList = useMemo(() => {
@@ -306,7 +349,7 @@ export default function TrackerKlaimDashboard() {
           return dataBulan === '' || dataBulan === '-' || dataBulan.toLowerCase() === 'null'
         }
         
-        // Compare full string (case insensitive) - PERBAIKAN UTAMA
+        // Compare full string (case insensitive)
         return dataBulan.toLowerCase() === filterBulan.toLowerCase()
       })
     }
@@ -447,7 +490,7 @@ export default function TrackerKlaimDashboard() {
         </div>
       </div>
 
-      {/* KPI SUMMARY CARDS (4 DALAM 1 BARIS) */}
+      {/* KPI SUMMARY CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
         <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
           <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
@@ -493,7 +536,7 @@ export default function TrackerKlaimDashboard() {
               onChange={(e) => setSearch(e.target.value)} 
               className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition" 
             />
-            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm">🔍</span>
+            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm"></span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -542,7 +585,7 @@ export default function TrackerKlaimDashboard() {
         )}
       </div>
 
-      {/* DATA TABLE (CENTER ALIGNED) */}
+      {/* DATA TABLE */}
       <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
           <table className="w-full text-center text-xs whitespace-nowrap">
@@ -602,7 +645,7 @@ export default function TrackerKlaimDashboard() {
 
                       <td className="px-5 py-4 text-center font-mono text-[11px] space-y-1">
                         <div className="text-zinc-600 flex items-center justify-center gap-1">
-                          <span className="text-blue-500">📥</span> Masuk: {!isNaN(item.tglMasukObj.getTime()) ? item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'}) : '-'}
+                          <span className="text-blue-500"></span> Masuk: {!isNaN(item.tglMasukObj.getTime()) ? item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'}) : '-'}
                         </div>
                         {item.isFinal && item.tglMutasiObj && !isNaN(item.tglMutasiObj.getTime()) && (
                           <div className="text-zinc-600 flex items-center justify-center gap-1">
