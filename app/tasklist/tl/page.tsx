@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { exportTasksToCSV } from '@/lib/export-csv'
 import { useRouter } from 'next/navigation'
@@ -502,6 +502,19 @@ export default function TeamLeaderConsole() {
     return null
   }
 
+  // Fungsi Parser untuk Membedah Format Log agar bisa tampil seperti Chat
+  const parseFeedbackLine = (line: string) => {
+    const match = line.match(/^\[(.*?)\] \((.*?)\):\s*(.*)$/);
+    if (match) {
+      return { time: match[1], name: match[2], msg: match[3] };
+    }
+    const oldMatch = line.match(/^\[(.*?)\]\s*(.*)$/);
+    if (oldMatch) {
+       return { time: oldMatch[1], name: 'User', msg: oldMatch[2] };
+    }
+    return { time: '', name: 'System', msg: line };
+  }
+
   const isSuperAdmin = userRole === 'superadmin'
   const displayRoleLabel = isSuperAdmin ? 'SUPERADMIN' : userRole === 'tlqc' ? 'TL QC' : userRole === 'tlog' ? 'TL OUTGOING' : userRole.toUpperCase()
 
@@ -551,7 +564,6 @@ export default function TeamLeaderConsole() {
         </div>
       </div>
 
-      {/* Banner Notifikasi Real-Time Dinamis & Bersih */}
       {(stats.urgent > 0 || stats.overdue > 0) && (
         <div className="bg-zinc-900 text-amber-300 px-4 py-3 rounded-lg text-xs font-bold flex items-center justify-between shadow-md border-l-4 border-amber-400">
           <div className="flex items-center gap-2">
@@ -644,155 +656,217 @@ export default function TeamLeaderConsole() {
             <p className="text-zinc-400 text-[11px]">Cobalah mengubah filter pencarian atau buat task baru.</p>
           </div>
         ) : (
-          paginatedTasks.map((task) => {
-            const isQC = task.pic_assignment?.toLowerCase().includes('qc')
-            const currentStatus = task.final_status || task.status || 'Open'
-            const isClosed = currentStatus === 'Closed'
-            const durationResult = isClosed ? calculateDuration(task.created_at, task.waktu_close) : null
-            const deadlineAlert = getDeadlineStatusInfo(task.deadline, task.status, task.final_status)
-            const urgencyStyle = getTaskUrgencyStyle(task)
+          (() => {
+            let hasShownActionable = false;
+            let hasShownCompleted = false;
 
-            let barPercent = 0
-            let barColor = 'bg-emerald-400'
-            if (!isClosed && task.deadline) {
-              const diffHours = (new Date(task.deadline).getTime() - Date.now()) / (1000 * 60 * 60)
-              if (diffHours < 0) { barPercent = 100; barColor = 'bg-rose-500' }
-              else if (diffHours <= 24) { barPercent = 100 - ((diffHours / 24) * 100); barColor = 'bg-amber-400' }
-              else { barPercent = 30; barColor = 'bg-emerald-400' }
-            }
+            return paginatedTasks.map((task) => {
+              const currentStatus = task.final_status || task.status || 'Open'
+              const isClosed = currentStatus === 'Closed'
+              const durationResult = isClosed ? calculateDuration(task.created_at, task.waktu_close) : null
+              const deadlineAlert = getDeadlineStatusInfo(task.deadline, task.status, task.final_status)
+              const urgencyStyle = getTaskUrgencyStyle(task)
 
-            const feedbackLines = task.feedback ? task.feedback.split('\n').filter(Boolean) : []
-            const isExpanded = expandedHistory[task.id]
-            const displayedLines = isExpanded ? feedbackLines : feedbackLines.slice(-2)
+              let barPercent = 0
+              let barColor = 'bg-emerald-400'
+              if (!isClosed && task.deadline) {
+                const diffHours = (new Date(task.deadline).getTime() - Date.now()) / (1000 * 60 * 60)
+                if (diffHours < 0) { barPercent = 100; barColor = 'bg-rose-500' }
+                else if (diffHours <= 24) { barPercent = 100 - ((diffHours / 24) * 100); barColor = 'bg-amber-400' }
+                else { barPercent = 30; barColor = 'bg-emerald-400' }
+              }
 
-            return (
-              <div key={task.id} className={`bg-white rounded-xl shadow-xs border border-zinc-200/90 overflow-hidden border-l-4 ${urgencyStyle.borderColor} transition hover:shadow-md`}>
-                <div className="p-5 space-y-4">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1.5 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-zinc-900 text-sm leading-snug">{task.detail_task}</h3>
-                        <button onClick={() => openEditModal(task)} title="Edit Task" className="p-1 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 rounded border border-zinc-200 transition cursor-pointer">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
+              const feedbackLines = task.feedback ? task.feedback.split('\n').filter(Boolean) : []
+              const isExpanded = expandedHistory[task.id]
+              const displayedLines = isExpanded ? feedbackLines : feedbackLines.slice(-2)
+
+              // Logika Pemisah (Section Header)
+              let showActionHeader = false;
+              let showClosedHeader = false;
+
+              if (!isClosed && !hasShownActionable) {
+                showActionHeader = true;
+                hasShownActionable = true;
+              } else if (isClosed && !hasShownCompleted) {
+                showClosedHeader = true;
+                hasShownCompleted = true;
+              }
+
+              return (
+                <React.Fragment key={task.id}>
+                  {showActionHeader && (
+                    <h2 className="text-xs font-extrabold text-zinc-500 tracking-widest uppercase mb-3 mt-6 ml-1">
+                      Perlu Tindakan Hari Ini
+                    </h2>
+                  )}
+                  {showClosedHeader && (
+                    <h2 className="text-xs font-extrabold text-zinc-500 tracking-widest uppercase mb-3 mt-6 ml-1">
+                      Selesai Baru-baru Ini
+                    </h2>
+                  )}
+                  
+                  <div className={`bg-white rounded-xl shadow-xs border border-zinc-200/90 overflow-hidden border-l-4 ${urgencyStyle.borderColor} transition hover:shadow-md`}>
+                    <div className="p-5 space-y-4">
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-zinc-900 text-sm leading-snug">{task.detail_task}</h3>
+                            <button onClick={() => openEditModal(task)} title="Edit Task" className="p-1 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 rounded border border-zinc-200 transition cursor-pointer">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono mt-1.5">
+                            {task.deadline && (
+                              <span className="text-zinc-500 font-semibold flex items-center gap-1">
+                                <span>🕒</span> Deadline: {formatDeadlineDisplay(task.deadline)}
+                              </span>
+                            )}
+                            {deadlineAlert && !isClosed && (
+                              <span className={`px-2 py-0.5 rounded font-black tracking-wide ${deadlineAlert.type === 'overdue' ? 'bg-rose-100 text-rose-800 animate-pulse' : 'bg-amber-100 text-amber-900'}`}>
+                                {deadlineAlert.text}
+                              </span>
+                            )}
+                            {!isClosed && task.deadline && (
+                              <div className="w-24 h-1.5 bg-zinc-100 rounded-full overflow-hidden inline-block">
+                                <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${barPercent}%` }}></div>
+                              </div>
+                            )}
+                            {isClosed && task.waktu_close && (
+                              <span className="text-emerald-800 font-bold flex items-center gap-1">
+                                ✅ Closed: {formatDeadlineDisplay(task.waktu_close)} {durationResult && `(Selesai dalam ${durationResult})`}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* AVATAR PIC - Pindah ke Kiri Bawah Deadline */}
+                          {task.pic_assignment && (
+                            <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-1">
+                              {task.pic_assignment.split(',').map((pic, idx) => {
+                                const p = pic.trim();
+                                if (!p) return null;
+                                const initials = p.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+                                const isManager = p.toLowerCase().includes('manager');
+                                const bgBubble = isManager ? 'bg-emerald-500 text-white' : 'bg-zinc-900 text-white';
+                                return (
+                                  <span key={idx} className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white border border-zinc-200 rounded-full text-[10px] font-bold text-zinc-700 shadow-2xs">
+                                    <span className={`w-3.5 h-3.5 flex items-center justify-center rounded-full text-[7px] ${bgBubble}`}>{initials}</span>
+                                    {p}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* BAGIAN KANAN ATAS (Tanpa Nama PIC) */}
+                        <div className="flex flex-wrap items-center gap-2 text-xs shrink-0 border-t md:border-t-0 border-zinc-100 pt-2 md:pt-0">
+                          <span className="px-2.5 py-1 rounded bg-zinc-100 text-zinc-700 font-medium border border-zinc-200">
+                            {task.kategori || 'Daily Task Operasional'}
+                          </span>
+
+                          <span className="px-2.5 py-1 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200/70 flex items-center gap-1">
+                            <span className={`w-1.5 h-1.5 rounded-full ${task.priority === 'Urgent' ? 'bg-rose-500' : 'bg-amber-500'}`} />
+                            {task.priority || 'Medium'}
+                          </span>
+
+                          <select
+                            value={currentStatus}
+                            onChange={(e) => updateStatus(task.id, e.target.value)}
+                            className={`font-bold rounded-lg px-3 py-1.5 border transition cursor-pointer appearance-none ${
+                              currentStatus === 'Closed' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                              currentStatus === 'On Progress' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                            }`}
+                          >
+                            <option value="Open">Open</option>
+                            <option value="On Progress">On Progress</option>
+                            <option value="Closed">Closed</option>
+                          </select>
+                        </div>
+
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono">
-                        {task.deadline && (
-                          <span className="text-zinc-500 font-semibold flex items-center gap-1">
-                            <span>🕒</span> Deadline: {formatDeadlineDisplay(task.deadline)}
+                      {/* HISTORY FEEDBACK THREAD (Desain Chat Rapi) */}
+                      <div className="border-t border-zinc-100 pt-3 space-y-2 mt-2">
+                        
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                            HISTORY FEEDBACK / TINDAK LANJUT
                           </span>
-                        )}
-                        {deadlineAlert && !isClosed && (
-                          <span className={`px-2 py-0.5 rounded font-black tracking-wide ${deadlineAlert.type === 'overdue' ? 'bg-rose-100 text-rose-800 animate-pulse' : 'bg-amber-100 text-amber-900'}`}>
-                            {deadlineAlert.text}
-                          </span>
-                        )}
-                        {!isClosed && task.deadline && (
-                          <div className="w-24 h-1.5 bg-zinc-100 rounded-full overflow-hidden inline-block">
-                            <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${barPercent}%` }}></div>
+                          {/* Tombol Lihat Semua Terlempar ke Kanan */}
+                          {feedbackLines.length > 2 && (
+                            <button onClick={() => setExpandedHistory(prev => ({ ...prev, [task.id]: !prev[task.id] }))} className="text-[11px] text-sky-600 font-bold hover:underline cursor-pointer">
+                              {isExpanded ? 'Tutup' : `Lihat semua (${feedbackLines.length})`}
+                            </button>
+                          )}
+                        </div>
+
+                        {feedbackLines.length > 0 && (
+                          <div className="p-3.5 rounded-lg bg-zinc-50 border border-zinc-100 text-[11px] space-y-3.5 max-h-48 overflow-y-auto shadow-inner">
+                            {displayedLines.map((line, idx) => {
+                              const { time, name, msg } = parseFeedbackLine(line);
+                              const initials = name.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase();
+                              return (
+                                <div key={idx} className="flex gap-2.5">
+                                  <div className="w-6 h-6 rounded-full bg-zinc-200 text-zinc-600 flex items-center justify-center font-extrabold text-[9px] shrink-0 shadow-2xs">
+                                    {initials}
+                                  </div>
+                                  <div className="flex-1 space-y-0.5">
+                                    <div className="flex items-baseline gap-2">
+                                      <span className="font-bold text-zinc-900">{name}</span>
+                                      {time && <span className="text-[10px] text-zinc-400 font-mono">{time}</span>}
+                                    </div>
+                                    <div className="text-zinc-600 leading-relaxed break-words">{msg}</div>
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
                         )}
-                        {isClosed && task.waktu_close && (
-                          <span className="text-emerald-800 font-bold flex items-center gap-1">
-                            ✅ Closed: {formatDeadlineDisplay(task.waktu_close)} {durationResult && `(Selesai dalam ${durationResult})`}
-                          </span>
+
+                        <div className="flex gap-2 pt-2">
+                          <input
+                            id={`new-feedback-${task.id}`}
+                            type="text"
+                            placeholder="Tambah tindak lanjut berikutnya..."
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                handleAddFeedbackLog(task.id, e.currentTarget.value)
+                              }
+                            }}
+                            className="flex-1 px-3 py-2 text-xs bg-white border border-zinc-200 rounded-lg focus:border-zinc-900 focus:outline-none placeholder:text-zinc-400 transition"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const el = document.getElementById(`new-feedback-${task.id}`) as HTMLInputElement | null
+                              if (el) handleAddFeedbackLog(task.id, el.value)
+                            }}
+                            className="px-4 py-2 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer shrink-0"
+                          >
+                            + Tambah
+                          </button>
+                        </div>
+
+                        {task.bukti_url && (
+                          <div className="pt-1">
+                            <a href={task.bukti_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 transition shadow-2xs">
+                              <span>🔗</span> Buka Lampiran Link
+                            </a>
+                          </div>
                         )}
                       </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-2 text-xs shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-zinc-100">
-                      <span className="px-2.5 py-1 rounded bg-zinc-100 text-zinc-700 font-medium border border-zinc-200">
-                        {task.kategori || 'Daily Task Operasional'}
-                      </span>
-
-                      <div className="flex items-center gap-1 px-2.5 py-1 bg-zinc-50 border border-zinc-200 rounded text-zinc-800 font-medium">
-                        <span className={`px-1 py-0.5 rounded text-[9px] font-bold uppercase ${isQC ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-200 text-zinc-700'}`}>
-                          {isQC ? 'QC' : 'TL'}
-                        </span>
-                        <span>{task.pic_assignment || '-'}</span>
-                      </div>
-
-                      <span className="px-2.5 py-1 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200/70 flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${task.priority === 'Urgent' ? 'bg-rose-500' : 'bg-amber-500'}`} />
-                        {task.priority || 'Medium'}
-                      </span>
-
-                      <select
-                        value={currentStatus}
-                        onChange={(e) => updateStatus(task.id, e.target.value)}
-                        className={`font-bold rounded-lg px-3 py-1.5 border transition cursor-pointer appearance-none ${
-                          currentStatus === 'Closed' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
-                          currentStatus === 'On Progress' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                        }`}
-                      >
-                        <option value="Open">Open</option>
-                        <option value="On Progress">On Progress</option>
-                        <option value="Closed">Closed</option>
-                      </select>
                     </div>
                   </div>
-
-                  <div className="border-t border-zinc-100 pt-3 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                        💬 History Feedback / Tindak Lanjut:
-                      </span>
-                      {feedbackLines.length > 2 && (
-                        <button onClick={() => setExpandedHistory(prev => ({ ...prev, [task.id]: !prev[task.id] }))} className="text-[11px] text-sky-600 font-bold hover:underline cursor-pointer">
-                          {isExpanded ? 'Tutup' : `Lihat semua (${feedbackLines.length})`}
-                        </button>
-                      )}
-                    </div>
-
-                    {feedbackLines.length > 0 && (
-                      <div className="p-2.5 rounded-lg bg-zinc-50 border-l-2 border-zinc-900 text-[11px] text-zinc-700 font-mono space-y-1 max-h-32 overflow-y-auto">
-                        {displayedLines.map((line, idx) => (
-                          <div key={idx} className="leading-snug">{line}</div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 pt-1">
-                      <input
-                        id={`new-feedback-${task.id}`}
-                        type="text"
-                        placeholder="Tambah tindak lanjut berikutnya..."
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            handleAddFeedbackLog(task.id, e.currentTarget.value)
-                          }
-                        }}
-                        className="flex-1 px-3 py-2 text-xs bg-white border border-zinc-200 rounded-lg focus:border-zinc-900 focus:outline-none placeholder:text-zinc-400 transition"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const el = document.getElementById(`new-feedback-${task.id}`) as HTMLInputElement | null
-                          if (el) handleAddFeedbackLog(task.id, el.value)
-                        }}
-                        className="px-4 py-2 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer shrink-0"
-                      >
-                        + Tambah
-                      </button>
-                    </div>
-
-                    {task.bukti_url && (
-                      <div className="pt-1">
-                        <a href={task.bukti_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 transition shadow-2xs">
-                          <span>🔗</span> Buka Lampiran Link
-                        </a>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              </div>
-            )
-          })
+                </React.Fragment>
+              )
+            })
+          })()
         )}
       </div>
 
