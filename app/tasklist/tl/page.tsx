@@ -528,37 +528,47 @@ export default function TeamLeaderConsole() {
           <p className="text-xs text-zinc-500 mt-1">Daily Tracker Log Activity & Tasklist Performance.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-            <button onClick={() => setActiveBadgeFilter(null)} className={`px-3 py-1 rounded border transition cursor-pointer ${!activeBadgeFilter ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-700'}`}>
+        <div className="flex flex-wrap items-center gap-4">
+          {/* KPI Badges - Diperbesar (text-sm, px-4, py-1.5) */}
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+            <button onClick={() => setActiveBadgeFilter(null)} className={`px-4 py-1.5 rounded border transition cursor-pointer ${!activeBadgeFilter ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'}`}>
               Total Task: <strong>{stats.total}</strong>
             </button>
-            <button onClick={() => toggleBadgeFilter('Open')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Open' ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-700'}`}>
+            <button onClick={() => toggleBadgeFilter('Open')} className={`px-4 py-1.5 rounded border transition cursor-pointer ${activeBadgeFilter === 'Open' ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'}`}>
               Open: <strong>{stats.open}</strong>
             </button>
-            <button onClick={() => toggleBadgeFilter('Progress')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Progress' ? 'bg-sky-600 text-white font-bold' : 'bg-sky-50 text-sky-700'}`}>
+            <button onClick={() => toggleBadgeFilter('Progress')} className={`px-4 py-1.5 rounded border transition cursor-pointer ${activeBadgeFilter === 'Progress' ? 'bg-sky-600 text-white font-bold' : 'bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
               Progress: <strong>{stats.progress}</strong>
             </button>
-            <button onClick={() => toggleBadgeFilter('Closed')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Closed' ? 'bg-emerald-600 text-white font-bold' : 'bg-emerald-50 text-emerald-700'}`}>
+            <button onClick={() => toggleBadgeFilter('Closed')} className={`px-4 py-1.5 rounded border transition cursor-pointer ${activeBadgeFilter === 'Closed' ? 'bg-emerald-600 text-white font-bold' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
               Closed: <strong>{stats.closed}</strong>
             </button>
-            <button onClick={() => toggleBadgeFilter('Urgent')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Urgent' ? 'bg-rose-600 text-white font-bold' : 'bg-rose-50 text-rose-700'}`}>
+            <button onClick={() => toggleBadgeFilter('Urgent')} className={`px-4 py-1.5 rounded border transition cursor-pointer ${activeBadgeFilter === 'Urgent' ? 'bg-rose-600 text-white font-bold' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'}`}>
               Urgent: <strong>{stats.urgent}</strong>
             </button>
-            <button onClick={() => toggleBadgeFilter('Overdue')} className={`px-3 py-1 rounded border transition cursor-pointer ${activeBadgeFilter === 'Overdue' ? 'bg-amber-600 text-white font-bold' : 'bg-amber-50 text-amber-800'}`}>
+            <button onClick={() => toggleBadgeFilter('Overdue')} className={`px-4 py-1.5 rounded border transition cursor-pointer ${activeBadgeFilter === 'Overdue' ? 'bg-amber-600 text-white font-bold' : 'bg-amber-50 text-amber-800 hover:bg-amber-100'}`}>
               Overdue: <strong>{stats.overdue}</strong>
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={handleExportDynamicCSV} className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition cursor-pointer">
-              ⤓ Export CSV
+            <button onClick={handleExportDynamicCSV} className="px-4 py-2 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold rounded shadow-2xs transition cursor-pointer flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export CSV
             </button>
-            <button onClick={() => setIsCreateModalOpen(true)} className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition cursor-pointer">
-              + Tambah Task
+            <button onClick={() => setIsCreateModalOpen(true)} className="px-4 py-2 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded shadow-2xs transition cursor-pointer flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Tambah Task
             </button>
-            <button onClick={fetchTasks} className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition cursor-pointer">
-              ↻
+            {/* Tombol Refresh dengan Icon Baru yang Jelas */}
+            <button onClick={fetchTasks} title="Refresh Data" className="p-2 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-800 rounded shadow-2xs transition cursor-pointer flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
             </button>
           </div>
         </div>
