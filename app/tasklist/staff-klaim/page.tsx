@@ -12,20 +12,12 @@ type KlaimData = {
   kasus: string
   status_progres: string
   status_final: string | null
-  tgl_masuk: string // Format ISO atau YYYY-MM-DD
+  tgl_masuk: string
   tgl_mutasi: string | null
   nominal_claim: number
   keterangan: string
   pic_staff: string
 }
-
-// Data Dummy Sesuai Mockup untuk Testing Visual
-const DUMMY_DATA: KlaimData[] = [
-  { id: '1', awb: 'JO0317713534', klien: 'AH STORE', ekspedisi: 'J&T EXPRESS', kasus: 'PAKET STUCK', status_progres: 'Claim Ekspedisi', status_final: 'Approved Claim', tgl_masuk: '2025-12-02', tgl_mutasi: '2026-03-25', nominal_claim: 125000, keterangan: 'Sudah ditransfer', pic_staff: 'Vina' },
-  { id: '2', awb: 'EZPKP144721481285962', klien: 'Dunia Unik', ekspedisi: 'NINJA EXPRESS', kasus: 'PAKET STUCK', status_progres: 'Complete RTS', status_final: 'Cancel Claim', tgl_masuk: '2025-12-26', tgl_mutasi: null, nominal_claim: 269000, keterangan: 'Alur Update menunggu konfirmasi', pic_staff: 'Vina' },
-  { id: '3', awb: 'JO0317672373', klien: 'Shopperia store', ekspedisi: 'J&T EXPRESS', kasus: 'RETUR BERMASALAH', status_progres: 'Complete', status_final: 'Reject Claim', tgl_masuk: '2026-01-02', tgl_mutasi: null, nominal_claim: 225000, keterangan: 'Barang Rentan Bocor dan pecah', pic_staff: 'Vina' },
-  { id: '4', awb: 'JO0317915132', klien: 'PT INTERNUSA MASTER', ekspedisi: 'J&T EXPRESS', kasus: 'RETUR BERMASALAH', status_progres: 'Complete RTS', status_final: 'Cancel Claim', tgl_masuk: '2026-01-02', tgl_mutasi: '2026-01-10', nominal_claim: 105000, keterangan: 'Clear Case / Fisik Datang ke Gudang dengan aman', pic_staff: 'Vina' },
-]
 
 // --- HELPER FUNCTIONS ---
 const parseTagKeterangan = (text: string) => {
@@ -37,13 +29,10 @@ const parseTagKeterangan = (text: string) => {
   
   let sisaTeks = text
   tags.forEach(t => {
-    // Basic remove matched string (simplified)
     const regex = new RegExp(t, 'ig')
     sisaTeks = sisaTeks.replace(regex, '').trim()
   })
-  // Hapus karakter sisa non-alfanumerik di awal/akhir jika ada
   sisaTeks = sisaTeks.replace(/^[^\w\s]+|[^\w\s]+$/g, '').trim()
-  
   return { tags, sisaTeks }
 }
 
@@ -57,7 +46,7 @@ export default function TrackerKlaimDashboard() {
   // --- STATE MANAGEMENT ---
   const [data, setData] = useState<KlaimData[]>([])
   const [loading, setLoading] = useState(true)
-  const [syncInfo, setSyncInfo] = useState({ time: '', status: 'idle' }) // idle | loading | success | error
+  const [syncInfo, setSyncInfo] = useState({ time: '', status: 'idle' })
 
   // Filters
   const [search, setSearch] = useState('')
@@ -72,17 +61,31 @@ export default function TrackerKlaimDashboard() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(50)
 
-  // --- FETCH & SYNC DATA ---
+  // --- FETCH REAL DATA FROM APPS SCRIPT / API ---
   const fetchData = async () => {
     setSyncInfo(prev => ({ ...prev, status: 'loading' }))
     try {
-      // TODO: Ganti dengan fetch asli ke API/Apps Script Anda
-      // const res = await fetch('YOUR_APPS_SCRIPT_URL')
-      // const jsonData = await res.json()
+      // Ganti URL di bawah dengan Endpoint Apps Script / API Real Anda
+      const response = await fetch('https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec')
+      const result = await response.json()
       
-      // Simulasi Fetch
-      await new Promise(resolve => setTimeout(resolve, 800)) 
-      setData(DUMMY_DATA)
+      // Mapping data agar sesuai dengan struktur type KlaimData
+      const mappedData: KlaimData[] = (result.data || result || []).map((item: any, index: number) => ({
+        id: item.id || String(index + 1),
+        awb: item.awb || item.NO_AWB || '-',
+        klien: item.klien || item.KLIEN || '-',
+        ekspedisi: item.ekspedisi || item.EKSPEDISI || '-',
+        kasus: item.kasus || item.KASUS || '-',
+        status_progres: item.status_progres || item.STATUS_PROGRES || '-',
+        status_final: item.status_final || item.STATUS_FINAL || null,
+        tgl_masuk: item.tgl_masuk || item.TGL_MASUK || new Date().toISOString(),
+        tgl_mutasi: item.tgl_mutasi || item.TGL_MUTASI || null,
+        nominal_claim: Number(item.nominal_claim || item.NOMINAL_CLAIM || 0),
+        keterangan: item.keterangan || item.KETERANGAN || '',
+        pic_staff: item.pic_staff || item.PIC_STAFF || 'Staff'
+      }))
+
+      setData(mappedData)
       
       const now = new Date()
       const formatter = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
@@ -91,21 +94,34 @@ export default function TrackerKlaimDashboard() {
       setSyncInfo({ time: timeStr, status: 'success' })
       localStorage.setItem('lastKlaimSync', timeStr)
     } catch (err) {
+      console.error('Gagal mengambil data real:', err)
       setSyncInfo(prev => ({ ...prev, status: 'error' }))
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    const savedTime = localStorage.getItem('lastKlaimSync')
-    if (savedTime) setSyncInfo({ time: savedTime, status: 'idle' })
-    fetchData()
-  }, [])
+useEffect(() => {
+    const isLogged = localStorage.getItem('isLoggedIn')
+    const role = (localStorage.getItem('userRole') || '').toLowerCase().trim()
+    
+    if (!isLogged) {
+      router.push('/')
+      return
+    }
 
-  // --- DATA PROCESSING (HIGH 1: AGING LOGIC) ---
+    // Role yang diizinkan: Superadmin, TL QC, dan Staff Klaim (TL OG tidak boleh)
+    const allowedRoles = ['superadmin', 'tlqc', 'staff_klaim', 'staffklaim']
+    
+    if (role && !allowedRoles.includes(role)) {
+      alert('Akses ditolak. Halaman Tracker Klaim khusus untuk Superadmin, TL QC, dan Staff Klaim.')
+      router.push('/') // Mengarahkan kembali jika tidak punya akses
+    }
+  }, [router])
+
+  // --- DATA PROCESSING (AGING LOGIC) ---
   const processedData = useMemo(() => {
-    const today = new Date('2026-08-24T00:00:00') // Menggunakan konteks waktu saat ini dari sistem
+    const today = new Date()
     
     return data.map(item => {
       const tglMasuk = new Date(item.tgl_masuk)
@@ -120,7 +136,7 @@ export default function TrackerKlaimDashboard() {
       const diffTime = Math.abs(tglAkhir.getTime() - tglMasuk.getTime())
       const agingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
-      let agingStatus = 'green' // < 7
+      let agingStatus = 'green'
       if (agingDays >= 7 && agingDays <= 14) agingStatus = 'yellow'
       if (agingDays > 14) agingStatus = 'red'
 
@@ -128,7 +144,7 @@ export default function TrackerKlaimDashboard() {
     })
   }, [data])
 
-  // --- PIC WORKLOAD AGGREGATION (MED 5) ---
+  // --- PIC WORKLOAD AGGREGATION ---
   const picWorkload = useMemo(() => {
     const counts: Record<string, number> = {}
     processedData.forEach(d => {
@@ -138,7 +154,7 @@ export default function TrackerKlaimDashboard() {
     return counts
   }, [processedData])
 
-  // --- FILTERING (MED 6) ---
+  // --- FILTERING ---
   const filteredData = useMemo(() => {
     let result = processedData
 
@@ -150,8 +166,6 @@ export default function TrackerKlaimDashboard() {
         d.keterangan.toLowerCase().includes(q)
       )
     }
-    // Asumsi Filter Bulan dari data tgl_masuk (contoh sederhana)
-    // if (filterBulan !== 'All') { ... } 
     if (filterEkspedisi !== 'All') result = result.filter(d => d.ekspedisi === filterEkspedisi)
     if (filterKategori !== 'All') result = result.filter(d => d.kasus === filterKategori)
     if (filterPic !== 'All') result = result.filter(d => d.pic_staff === filterPic)
@@ -160,7 +174,7 @@ export default function TrackerKlaimDashboard() {
       else result = result.filter(d => d.status_final === filterStatus)
     }
 
-    // --- SORTING (LOW 10) ---
+    // --- SORTING ---
     if (sortConfig.key) {
       result.sort((a, b) => {
         if (sortConfig.key === 'aging') {
@@ -174,36 +188,60 @@ export default function TrackerKlaimDashboard() {
     }
 
     return result
-  }, [processedData, search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, sortConfig])
+  }, [processedData, search, filterEkspedisi, filterKategori, filterPic, filterStatus, sortConfig])
 
-  // --- SUMMARY STATS (HIGH 4: DYNAMIC SUMMARY) ---
+  // --- SUMMARY STATS ---
   const stats = useMemo(() => {
     let totalKasus = filteredData.length
-    let totalEZ = filteredData.filter(d => d.klien.toLowerCase().includes('ez')).length // Asumsi
-    let totalApproved = 0
-    let totalReject = 0
+    let totalKasusNominal = filteredData.reduce((acc, d) => acc + d.nominal_claim, 0)
+    
+    let pengajuanResi = 0
+    let pengajuanNominal = 0
+    let approvedResi = 0
+    let approvedNominal = 0
+    let cancelRejectResi = 0
+    let cancelRejectNominal = 0
 
     filteredData.forEach(d => {
-      if (d.status_final?.toLowerCase().includes('approved')) {
-        totalApproved += d.nominal_claim
+      const finalStat = (d.status_final || '').toLowerCase()
+      const progStat = (d.status_progres || '').toLowerCase()
+
+      if (!d.status_final || progStat.includes('pengajuan') || progStat.includes('claim')) {
+        pengajuanResi++
+        pengajuanNominal += d.nominal_claim
       }
-      if (d.status_final?.toLowerCase().includes('reject') || d.status_final?.toLowerCase().includes('cancel')) {
-        totalReject++
+
+      if (finalStat.includes('approved')) {
+        approvedResi++
+        approvedNominal += d.nominal_claim
+      }
+
+      if (finalStat.includes('reject') || finalStat.includes('cancel')) {
+        cancelRejectResi++
+        cancelRejectNominal += d.nominal_claim
       }
     })
 
-    return { totalKasus, totalEZ, totalApproved, totalReject }
+    return { 
+      totalKasus, 
+      totalKasusNominal, 
+      pengajuanResi, 
+      pengajuanNominal, 
+      approvedResi, 
+      approvedNominal, 
+      cancelRejectResi, 
+      cancelRejectNominal 
+    }
   }, [filteredData])
 
-  // --- PAGINATION (MED 8) ---
+  // --- PAGINATION ---
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
     return filteredData.slice(start, start + itemsPerPage)
   }, [filteredData, currentPage, itemsPerPage])
 
-  // Reset page when filters change
-  useEffect(() => { setCurrentPage(1) }, [search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus])
+  useEffect(() => { setCurrentPage(1) }, [search, filterEkspedisi, filterKategori, filterPic, filterStatus])
 
   const handleSort = (key: 'aging' | 'nominal') => {
     setSortConfig(prev => ({
@@ -211,7 +249,7 @@ export default function TrackerKlaimDashboard() {
     }))
   }
 
-  // --- EXPORT CSV (LOW 11) ---
+  // --- EXPORT CSV ---
   const exportToCSV = () => {
     if (filteredData.length === 0) return
     const headers = ['AWB', 'KLIEN', 'EKSPEDISI', 'KASUS', 'STATUS PROGRES', 'STATUS FINAL', 'TGL MASUK', 'TGL MUTASI', 'AGING (HARI)', 'NOMINAL CLAIM', 'KETERANGAN', 'PIC STAFF']
@@ -233,7 +271,6 @@ export default function TrackerKlaimDashboard() {
     document.body.removeChild(link)
   }
 
-  // Utility List untuk Dropdown
   const ekspedisiList = ['All', 'J&T EXPRESS', 'NINJA EXPRESS', 'SHOPEE EXPRESS', 'SICEPAT']
   const kategoriList = ['All', 'PAKET STUCK', 'RETUR BERMASALAH', 'BARANG HILANG']
   const finalStatusList = ['All', 'Open', 'Approved Claim', 'Cancel Claim', 'Reject Claim']
@@ -241,7 +278,7 @@ export default function TrackerKlaimDashboard() {
   return (
     <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 bg-zinc-50/50 min-h-screen pb-20">
       
-      {/* HEADER & SYNC (HIGH 3) */}
+      {/* HEADER & SYNC */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900">Tracker & Monitoring Klaim</h1>
@@ -263,44 +300,53 @@ export default function TrackerKlaimDashboard() {
         </div>
       </div>
 
-      {/* FILTER ACTIVE LABEL */}
-      <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 inline-flex">
-        <span>↗</span> Angka di bawah mengikuti filter aktif
-      </div>
-
-      {/* SUMMARY CARDS (HIGH 4) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* SUMMARY CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+        
+        {/* Card 1: Total Kasus Klaim */}
         <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
           <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">Total Kasus Klaim</span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-zinc-900">{stats.totalKasus.toLocaleString('id-ID')}</span>
-            <span className="text-sm font-semibold text-zinc-500">Resi</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-black text-zinc-900">{stats.totalKasus.toLocaleString('id-ID')} Resi</span>
+            <span className="text-xs font-bold text-zinc-400">|</span>
+            <span className="text-sm font-bold text-zinc-700">{formatRupiah(stats.totalKasusNominal)}</span>
           </div>
-          <span className="text-[10px] text-zinc-400 mt-2">↳ sesuai filter aktif</span>
+          <span className="text-[10px] text-zinc-400 mt-2">↳ Akumulasi Keseluruhan Kasus Klaim</span>
         </div>
+
+        {/* Card 2: Total Pengajuan Klaim */}
         <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
-          <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">Total Pengajuan EZ</span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-zinc-900">{stats.totalEZ.toLocaleString('id-ID')}</span>
-            <span className="text-sm font-semibold text-zinc-500">Kasus</span>
+          <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">Total Pengajuan Klaim</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-black text-zinc-900">{stats.pengajuanResi.toLocaleString('id-ID')} Resi</span>
+            <span className="text-xs font-bold text-zinc-400">|</span>
+            <span className="text-sm font-bold text-zinc-700">{formatRupiah(stats.pengajuanNominal)}</span>
           </div>
-          <span className="text-[10px] text-zinc-400 mt-2">↳ sesuai filter aktif</span>
+          <span className="text-[10px] text-zinc-400 mt-2">↳ Kasus Klaim Yang sedang dalam proses pengajuan.</span>
         </div>
+
+        {/* Card 3: Total Approved */}
         <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
           <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Total Approved (Pencairan)</span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-emerald-600">{formatRupiah(stats.totalApproved)}</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-black text-emerald-600">{formatRupiah(stats.approvedNominal)}</span>
+            <span className="text-xs font-bold text-emerald-400">|</span>
+            <span className="text-sm font-bold text-emerald-700">{stats.approvedResi.toLocaleString('id-ID')} Resi</span>
           </div>
-          <span className="text-[10px] text-emerald-500/70 mt-2">↳ sesuai filter aktif</span>
+          <span className="text-[10px] text-emerald-500/70 mt-2">↳ Nominal dana yang diterima.</span>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
+
+        {/* Card 4: Cancel / Reject Claim */}
+        <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col gap-1 relative overflow-hidden md:col-span-3">
           <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-wider">Cancel / Reject Claim</span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-rose-600">{stats.totalReject.toLocaleString('id-ID')}</span>
-            <span className="text-sm font-semibold text-rose-500">Kasus</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-black text-rose-600">{stats.cancelRejectResi.toLocaleString('id-ID')} Resi</span>
+            <span className="text-xs font-bold text-rose-400">|</span>
+            <span className="text-sm font-bold text-rose-700">{formatRupiah(stats.cancelRejectNominal)}</span>
           </div>
-          <span className="text-[10px] text-rose-500/70 mt-2">↳ sesuai filter aktif</span>
+          <span className="text-[10px] text-rose-500/70 mt-2">↳ Klaim ditolak atau hangus.</span>
         </div>
+
       </div>
 
       {/* TOOLBAR & FILTERS */}
@@ -318,17 +364,12 @@ export default function TrackerKlaimDashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
-              <option value="All">Bulan: Agustus 2026</option>
-              {/* Dummy Options */}
-            </select>
             <select value={filterEkspedisi} onChange={e => setFilterEkspedisi(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
               {ekspedisiList.map(e => <option key={e} value={e}>{e === 'All' ? 'Ekspedisi' : e}</option>)}
             </select>
             <select value={filterKategori} onChange={e => setFilterKategori(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
               {kategoriList.map(k => <option key={k} value={k}>{k === 'All' ? 'Kategori Case' : k}</option>)}
             </select>
-            {/* PIC Filter + WORKLOAD (MED 5) */}
             <select value={filterPic} onChange={e => setFilterPic(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
               <option value="All">PIC Staff</option>
               {Object.entries(picWorkload).map(([pic, count]) => (
@@ -345,7 +386,7 @@ export default function TrackerKlaimDashboard() {
           </div>
         </div>
 
-        {/* ACTIVE CHIPS (MED 6) */}
+        {/* ACTIVE CHIPS */}
         {(search || filterEkspedisi !== 'All' || filterKategori !== 'All' || filterPic !== 'All' || filterStatus !== 'All') && (
           <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-zinc-100">
             {filterEkspedisi !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Ekspedisi: {filterEkspedisi} <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
@@ -369,7 +410,6 @@ export default function TrackerKlaimDashboard() {
                 <th className="px-5 py-4">NO. AWB & KLIEN</th>
                 <th className="px-5 py-4">EKSPEDISI & KASUS</th>
                 <th className="px-5 py-4">STATUS PROGRES → FINAL</th>
-                {/* SORTABLE HEADERS (LOW 10) */}
                 <th className="px-5 py-4 cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('aging')}>
                   TIMELINE & AGING {sortConfig.key === 'aging' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </th>
@@ -382,19 +422,13 @@ export default function TrackerKlaimDashboard() {
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {loading ? (
-                <tr><td colSpan={7} className="px-5 py-16 text-center text-zinc-400 font-bold animate-pulse">Memuat Data...</td></tr>
+                <tr><td colSpan={7} className="px-5 py-16 text-center text-zinc-400 font-bold animate-pulse">Memuat Data dari Google Sheets...</td></tr>
               ) : paginatedData.length === 0 ? (
                 <tr><td colSpan={7} className="px-5 py-16 text-center text-zinc-500 font-medium">Tidak ada data klaim yang sesuai filter.</td></tr>
               ) : (
                 paginatedData.map((item) => {
-                  
-                  // Styling Keterangan Tag (MED 7)
                   const { tags, sisaTeks } = parseTagKeterangan(item.keterangan || '')
-                  
-                  // Styling Nominal (LOW 9) - Bold & Color if > 200rb
                   const isHighValue = item.nominal_claim > 200000
-                  
-                  // Avatar Initial
                   const avatarInitial = item.pic_staff.substring(0, 2).toUpperCase()
 
                   return (
@@ -408,7 +442,6 @@ export default function TrackerKlaimDashboard() {
                         <div className="text-rose-600 font-bold text-[10px] uppercase tracking-wide mt-1">{item.kasus}</div>
                       </td>
                       
-                      {/* STATUS PROGRESS -> FINAL (HIGH 2) */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <span className="text-zinc-500 font-medium">{item.status_progres}</span>
@@ -426,7 +459,6 @@ export default function TrackerKlaimDashboard() {
                         </div>
                       </td>
 
-                      {/* AGING LOGIC (HIGH 1) */}
                       <td className="px-5 py-4 font-mono text-[11px] space-y-1">
                         <div className="text-zinc-600 flex items-center gap-1">
                           <span className="text-blue-500">📥</span> Masuk: {item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'})}
@@ -479,7 +511,7 @@ export default function TrackerKlaimDashboard() {
           </table>
         </div>
 
-        {/* PAGINATION (MED 8) */}
+        {/* PAGINATION */}
         {filteredData.length > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-5 py-3 border-t border-zinc-200 bg-white text-[11px]">
             <div className="text-zinc-500 font-medium flex items-center gap-2">
@@ -497,7 +529,6 @@ export default function TrackerKlaimDashboard() {
                 &lt; Sebelumnya
               </button>
               
-              {/* Simple Page Numbers */}
               <div className="flex items-center gap-1 px-2">
                 {[...Array(Math.min(3, totalPages))].map((_, i) => {
                   const pageNum = i + 1
