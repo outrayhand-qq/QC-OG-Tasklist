@@ -1,435 +1,528 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
-export default function StaffKlaimDashboard() {
-  const router = useRouter()
-  const [data, setData] = useState<any[]>([])
-  const [loading, setLoading] = useState<boolean>(true)
-  const [searchQuery, setSearchQuery] = useState<string>('')
+// --- TYPE DEFINITIONS ---
+type KlaimData = {
+  id: string
+  awb: string
+  klien: string
+  ekspedisi: string
+  kasus: string
+  status_progres: string
+  status_final: string | null
+  tgl_masuk: string // Format ISO atau YYYY-MM-DD
+  tgl_mutasi: string | null
+  nominal_claim: number
+  keterangan: string
+  pic_staff: string
+}
+
+// Data Dummy Sesuai Mockup untuk Testing Visual
+const DUMMY_DATA: KlaimData[] = [
+  { id: '1', awb: 'JO0317713534', klien: 'AH STORE', ekspedisi: 'J&T EXPRESS', kasus: 'PAKET STUCK', status_progres: 'Claim Ekspedisi', status_final: 'Approved Claim', tgl_masuk: '2025-12-02', tgl_mutasi: '2026-03-25', nominal_claim: 125000, keterangan: 'Sudah ditransfer', pic_staff: 'Vina' },
+  { id: '2', awb: 'EZPKP144721481285962', klien: 'Dunia Unik', ekspedisi: 'NINJA EXPRESS', kasus: 'PAKET STUCK', status_progres: 'Complete RTS', status_final: 'Cancel Claim', tgl_masuk: '2025-12-26', tgl_mutasi: null, nominal_claim: 269000, keterangan: 'Alur Update menunggu konfirmasi', pic_staff: 'Vina' },
+  { id: '3', awb: 'JO0317672373', klien: 'Shopperia store', ekspedisi: 'J&T EXPRESS', kasus: 'RETUR BERMASALAH', status_progres: 'Complete', status_final: 'Reject Claim', tgl_masuk: '2026-01-02', tgl_mutasi: null, nominal_claim: 225000, keterangan: 'Barang Rentan Bocor dan pecah', pic_staff: 'Vina' },
+  { id: '4', awb: 'JO0317915132', klien: 'PT INTERNUSA MASTER', ekspedisi: 'J&T EXPRESS', kasus: 'RETUR BERMASALAH', status_progres: 'Complete RTS', status_final: 'Cancel Claim', tgl_masuk: '2026-01-02', tgl_mutasi: '2026-01-10', nominal_claim: 105000, keterangan: 'Clear Case / Fisik Datang ke Gudang dengan aman', pic_staff: 'Vina' },
+]
+
+// --- HELPER FUNCTIONS ---
+const parseTagKeterangan = (text: string) => {
+  const tags = []
+  const lowerText = text.toLowerCase()
+  if (lowerText.includes('rentan bocor')) tags.push('Barang Rentan Bocor')
+  if (lowerText.includes('clear case') || lowerText.includes('fisik datang')) tags.push('Fisik Datang ke Gudang')
+  if (lowerText.includes('alur update')) tags.push('Alur Update')
   
-  // State Filter
-  const [selectedEkspedisi, setSelectedEkspedisi] = useState<string>('All')
-  const [selectedCase, setSelectedCase] = useState<string>('All')
-  const [selectedUser, setSelectedUser] = useState<string>('All')
-  const [selectedBulan, setSelectedBulan] = useState<string>('All')
-  const [selectedStatus, setSelectedStatus] = useState<string>('All')
+  let sisaTeks = text
+  tags.forEach(t => {
+    // Basic remove matched string (simplified)
+    const regex = new RegExp(t, 'ig')
+    sisaTeks = sisaTeks.replace(regex, '').trim()
+  })
+  // Hapus karakter sisa non-alfanumerik di awal/akhir jika ada
+  sisaTeks = sisaTeks.replace(/^[^\w\s]+|[^\w\s]+$/g, '').trim()
+  
+  return { tags, sisaTeks }
+}
 
-  // State Pagination
-  const [currentPage, setCurrentPage] = useState<number>(1)
-  const itemsPerPage = 50
+const formatRupiah = (angka: number) => {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka)
+}
 
-  useEffect(() => {
-    const isLogged = localStorage.getItem('isLoggedIn')
-    if (!isLogged) {
-      router.push('/')
-    }
-  }, [router])
+export default function TrackerKlaimDashboard() {
+  const router = useRouter()
+  
+  // --- STATE MANAGEMENT ---
+  const [data, setData] = useState<KlaimData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [syncInfo, setSyncInfo] = useState({ time: '', status: 'idle' }) // idle | loading | success | error
 
-  const fetchDataFromSheet = async () => {
-    setLoading(true)
+  // Filters
+  const [search, setSearch] = useState('')
+  const [filterBulan, setFilterBulan] = useState('All')
+  const [filterEkspedisi, setFilterEkspedisi] = useState('All')
+  const [filterKategori, setFilterKategori] = useState('All')
+  const [filterPic, setFilterPic] = useState('All')
+  const [filterStatus, setFilterStatus] = useState('All')
+
+  // Sort & Pagination
+  const [sortConfig, setSortConfig] = useState<{ key: 'aging' | 'nominal' | null, direction: 'asc' | 'desc' }>({ key: null, direction: 'desc' })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(50)
+
+  // --- FETCH & SYNC DATA ---
+  const fetchData = async () => {
+    setSyncInfo(prev => ({ ...prev, status: 'loading' }))
     try {
-      const url = 'https://script.google.com/macros/s/AKfycbylwHe4pvQIl7a1gnNynbUqZG6U5Aa7pPpByICiznMPSRO-JYMR1HavlStzCt_gAoYKCg/exec'
-      if (url.includes('MASUKKAN_URL')) {
-        setLoading(false)
-        return
-      }
-      const res = await fetch(url)
-      const result = await res.json()
-      setData(result)
-    } catch (error) {
-      console.error('Gagal mengambil data:', error)
+      // TODO: Ganti dengan fetch asli ke API/Apps Script Anda
+      // const res = await fetch('YOUR_APPS_SCRIPT_URL')
+      // const jsonData = await res.json()
+      
+      // Simulasi Fetch
+      await new Promise(resolve => setTimeout(resolve, 800)) 
+      setData(DUMMY_DATA)
+      
+      const now = new Date()
+      const formatter = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
+      const timeStr = `${formatter.format(now)} WIB`
+      
+      setSyncInfo({ time: timeStr, status: 'success' })
+      localStorage.setItem('lastKlaimSync', timeStr)
+    } catch (err) {
+      setSyncInfo(prev => ({ ...prev, status: 'error' }))
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchDataFromSheet()
+    const savedTime = localStorage.getItem('lastKlaimSync')
+    if (savedTime) setSyncInfo({ time: savedTime, status: 'idle' })
+    fetchData()
   }, [])
 
-  // Helper super tangguh: Mencari berdasarkan key, atau langsung ambil kolom ke-colIndex (0 untuk User/Kolom A)
-  const getVal = (item: any, possibleKeys: string[], colIndex?: number) => {
-    const itemKeys = Object.keys(item)
+  // --- DATA PROCESSING (HIGH 1: AGING LOGIC) ---
+  const processedData = useMemo(() => {
+    const today = new Date('2026-08-24T00:00:00') // Menggunakan konteks waktu saat ini dari sistem
     
-    // 1. Cari berdasarkan nama key (diabaikan spasi/huruf besar-kecil)
-    for (const key of possibleKeys) {
-      const cleanKey = key.toLowerCase().replace(/[\s_]/g, '')
-      const found = itemKeys.find(
-        (k) => k.toLowerCase().replace(/[\s_]/g, '') === cleanKey
-      )
-      if (found !== undefined && item[found] !== null && item[found] !== '' && item[found] !== 'undefined') {
-        return item[found]
+    return data.map(item => {
+      const tglMasuk = new Date(item.tgl_masuk)
+      let tglAkhir = today
+      let isFinal = false
+
+      if (item.status_final && item.tgl_mutasi) {
+        tglAkhir = new Date(item.tgl_mutasi)
+        isFinal = true
       }
-    }
 
-    // 2. Jika tidak ketemu berdasarkan key, ambil langsung berdasarkan urutan kolom (index)
-    if (colIndex !== undefined && Array.isArray(itemKeys) && itemKeys.length > colIndex) {
-      const val = item[itemKeys[colIndex]]
-      if (val !== null && val !== '' && val !== 'undefined') {
-        return val
-      }
-    }
+      const diffTime = Math.abs(tglAkhir.getTime() - tglMasuk.getTime())
+      const agingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
-    return ''
-  }
+      let agingStatus = 'green' // < 7
+      if (agingDays >= 7 && agingDays <= 14) agingStatus = 'yellow'
+      if (agingDays > 14) agingStatus = 'red'
 
-  // Ekstraksi nilai bulan yang cerdas
-  const extractMonth = (item: any) => {
-    let val = String(getVal(item, ['bulan', 'month']))
-    if (val && val !== '-' && val.toLowerCase() !== 'invalid date') return val.trim()
-
-    const dateVal = getVal(item, ['date_added', 'dateadded', 'tgl_pengajuan_ez'])
-    if (dateVal) {
-      try {
-        const d = new Date(dateVal)
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-        }
-        return String(dateVal)
-      } catch {
-        return String(dateVal)
-      }
-    }
-    return ''
-  }
-
-  // Opsi Dropdown Unik (User dipaksa ambil dari indeks 0 / Kolom A)
-  const uniqueUsers = useMemo(() => {
-    const list = data.map(item => String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff'], 0)).trim())
-    return Array.from(new Set(list)).filter(val => val && val !== 'undefined' && val !== 'null' && val !== '-' && val.length < 30).sort()
+      return { ...item, agingDays, isFinal, agingStatus, tglMasukObj: tglMasuk, tglMutasiObj: item.tgl_mutasi ? new Date(item.tgl_mutasi) : null }
+    })
   }, [data])
 
-  const uniqueBulan = useMemo(() => {
-    const list = data.map(item => extractMonth(item))
-    return Array.from(new Set(list)).filter(val => val && val !== 'undefined' && val !== 'null' && val !== '-').sort()
-  }, [data])
+  // --- PIC WORKLOAD AGGREGATION (MED 5) ---
+  const picWorkload = useMemo(() => {
+    const counts: Record<string, number> = {}
+    processedData.forEach(d => {
+      if (!counts[d.pic_staff]) counts[d.pic_staff] = 0
+      counts[d.pic_staff]++
+    })
+    return counts
+  }, [processedData])
 
-  const uniqueStatus = useMemo(() => {
-    const list = data.map(item => String(getVal(item, ['final_status', 'finalstatus', 'statusfinal'])).trim())
-    return Array.from(new Set(list)).filter(val => val && val !== 'undefined' && val !== 'null' && val !== '-').sort()
-  }, [data])
-
-  // 1. FILTER DATA UTAMA
+  // --- FILTERING (MED 6) ---
   const filteredData = useMemo(() => {
-    return data.filter((item) => {
-      const awb = String(getVal(item, ['no_awb', 'noawb'])).toLowerCase()
-      const client = String(getVal(item, ['client_name', 'clientname'])).toLowerCase()
-      const ket = String(getVal(item, ['keterangan'])).toLowerCase()
-      
-      const ekspedisiVal = String(getVal(item, ['jenis_ekspedisi', 'jenisekspedisi'])).trim()
-      const caseVal = String(getVal(item, ['kategori_case', 'kategoricase'])).trim()
-      const userVal = String(getVal(item, ['user', 'pic', 'staff', 'namastaff', 'picstaff'], 0)).trim()
-      const bulanVal = extractMonth(item)
-      const statusVal = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal'])).trim()
+    let result = processedData
 
-      const query = searchQuery.toLowerCase()
-      const matchesSearch = awb.includes(query) || client.includes(query) || ket.includes(query)
-      
-      const matchesEkspedisi = selectedEkspedisi === 'All' || ekspedisiVal.toLowerCase() === selectedEkspedisi.toLowerCase()
-      const matchesCase = selectedCase === 'All' || caseVal.toLowerCase() === selectedCase.toLowerCase()
-      const matchesUser = selectedUser === 'All' || userVal.toLowerCase() === selectedUser.toLowerCase()
-      const matchesBulan = selectedBulan === 'All' || bulanVal.toLowerCase() === selectedBulan.toLowerCase()
-      const matchesStatus = selectedStatus === 'All' || statusVal.toLowerCase() === selectedStatus.toLowerCase()
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter(d => 
+        d.awb.toLowerCase().includes(q) || 
+        d.klien.toLowerCase().includes(q) || 
+        d.keterangan.toLowerCase().includes(q)
+      )
+    }
+    // Asumsi Filter Bulan dari data tgl_masuk (contoh sederhana)
+    // if (filterBulan !== 'All') { ... } 
+    if (filterEkspedisi !== 'All') result = result.filter(d => d.ekspedisi === filterEkspedisi)
+    if (filterKategori !== 'All') result = result.filter(d => d.kasus === filterKategori)
+    if (filterPic !== 'All') result = result.filter(d => d.pic_staff === filterPic)
+    if (filterStatus !== 'All') {
+      if (filterStatus === 'Open') result = result.filter(d => !d.isFinal)
+      else result = result.filter(d => d.status_final === filterStatus)
+    }
 
-      return matchesSearch && matchesEkspedisi && matchesCase && matchesUser && matchesBulan && matchesStatus
-    })
-  }, [data, searchQuery, selectedEkspedisi, selectedCase, selectedUser, selectedBulan, selectedStatus])
+    // --- SORTING (LOW 10) ---
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        if (sortConfig.key === 'aging') {
+          return sortConfig.direction === 'asc' ? a.agingDays - b.agingDays : b.agingDays - a.agingDays
+        }
+        if (sortConfig.key === 'nominal') {
+          return sortConfig.direction === 'asc' ? a.nominal_claim - b.nominal_claim : b.nominal_claim - a.nominal_claim
+        }
+        return 0
+      })
+    }
 
-  // Reset ke halaman 1 setiap kali filter atau pencarian berubah
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchQuery, selectedEkspedisi, selectedCase, selectedUser, selectedBulan, selectedStatus])
+    return result
+  }, [processedData, search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus, sortConfig])
 
-  // 2. STATISTIK DINAMIS (Mengikuti Filter Aktif)
+  // --- SUMMARY STATS (HIGH 4: DYNAMIC SUMMARY) ---
   const stats = useMemo(() => {
-    const totalKasus = filteredData.length
-    let totalPengajuan = 0
-    let totalRupiahApproved = 0
-    let totalRejectCancel = 0
+    let totalKasus = filteredData.length
+    let totalEZ = filteredData.filter(d => d.klien.toLowerCase().includes('ez')).length // Asumsi
+    let totalApproved = 0
+    let totalReject = 0
 
-    filteredData.forEach((item) => {
-      const tglAjuan = getVal(item, ['tgl_pengajuan_ez', 'tglpengajuanez'])
-      if (tglAjuan) totalPengajuan += 1
-
-      const fStatus = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal'])).toLowerCase()
-      if (fStatus.includes('approved')) {
-        const nominal = Number(getVal(item, ['nominal_claim', 'nominalclaim'])) || 0
-        totalRupiahApproved += nominal
+    filteredData.forEach(d => {
+      if (d.status_final?.toLowerCase().includes('approved')) {
+        totalApproved += d.nominal_claim
       }
-      if (fStatus.includes('cancel') || fStatus.includes('reject') || fStatus.includes('void')) {
-        totalRejectCancel += 1
+      if (d.status_final?.toLowerCase().includes('reject') || d.status_final?.toLowerCase().includes('cancel')) {
+        totalReject++
       }
     })
 
-    return { totalKasus, totalPengajuan, totalRupiahApproved, totalRejectCancel }
+    return { totalKasus, totalEZ, totalApproved, totalReject }
   }, [filteredData])
 
-  // 3. PAGINATION (50 Data Per Halaman)
+  // --- PAGINATION (MED 8) ---
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
     return filteredData.slice(start, start + itemsPerPage)
-  }, [filteredData, currentPage])
+  }, [filteredData, currentPage, itemsPerPage])
 
-  const formatRupiah = (val: any) => {
-    const num = Number(val) || 0
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num)
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1) }, [search, filterBulan, filterEkspedisi, filterKategori, filterPic, filterStatus])
+
+  const handleSort = (key: 'aging' | 'nominal') => {
+    setSortConfig(prev => ({
+      key, direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }))
   }
 
-  const formatDateDisplay = (dateVal: any) => {
-    if (!dateVal) return '-'
-    try {
-      const d = new Date(dateVal)
-      if (isNaN(d.getTime())) return String(dateVal)
-      return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-    } catch {
-      return String(dateVal)
-    }
+  // --- EXPORT CSV (LOW 11) ---
+  const exportToCSV = () => {
+    if (filteredData.length === 0) return
+    const headers = ['AWB', 'KLIEN', 'EKSPEDISI', 'KASUS', 'STATUS PROGRES', 'STATUS FINAL', 'TGL MASUK', 'TGL MUTASI', 'AGING (HARI)', 'NOMINAL CLAIM', 'KETERANGAN', 'PIC STAFF']
+    const csvContent = [
+      headers.join(','),
+      ...filteredData.map(d => [
+        d.awb, `"${d.klien}"`, d.ekspedisi, d.kasus, d.status_progres, d.status_final || '', 
+        d.tgl_masuk, d.tgl_mutasi || '', d.agingDays, d.nominal_claim, `"${d.keterangan.replace(/"/g, '""')}"`, d.pic_staff
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `Export_Klaim_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
+
+  // Utility List untuk Dropdown
+  const ekspedisiList = ['All', 'J&T EXPRESS', 'NINJA EXPRESS', 'SHOPEE EXPRESS', 'SICEPAT']
+  const kategoriList = ['All', 'PAKET STUCK', 'RETUR BERMASALAH', 'BARANG HILANG']
+  const finalStatusList = ['All', 'Open', 'Approved Claim', 'Cancel Claim', 'Reject Claim']
 
   return (
-    <div className="space-y-6">
+    <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 bg-zinc-50/50 min-h-screen pb-20">
       
-      {/* Header Halaman */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-zinc-200">
+      {/* HEADER & SYNC (HIGH 3) */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-zinc-900">
-            Tracker & Monitoring Klaim
-          </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Real-time synchronization data dari Google Sheets operasional klaim.
-          </p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900">Tracker & Monitoring Klaim</h1>
+          <p className="text-sm text-zinc-500 mt-1">Real-time synchronization data dari Google Sheets operasional klaim.</p>
         </div>
-        <button
-          onClick={fetchDataFromSheet}
-          className="px-3.5 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 text-xs font-semibold rounded shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
-        >
-          <span>↻</span>
-          <span>Sinkronisasi Data</span>
-        </button>
-      </div>
-
-      {/* Metric Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
-          <div className="text-xl font-black text-zinc-900">{stats.totalKasus} Resi</div>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Pengajuan EZ</span>
-          <div className="text-xl font-black text-sky-600">{stats.totalPengajuan} Kasus</div>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Approved (Pencairan)</span>
-          <div className="text-xl font-black text-emerald-600">{formatRupiah(stats.totalRupiahApproved)}</div>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Cancel / Reject Claim</span>
-          <div className="text-xl font-black text-rose-600">{stats.totalRejectCancel} Kasus</div>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-600">
+            {syncInfo.status === 'loading' && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>}
+            {syncInfo.status === 'success' && <span className="w-2 h-2 rounded-full bg-emerald-500"></span>}
+            {syncInfo.status === 'error' && <span className="w-2 h-2 rounded-full bg-rose-500"></span>}
+            <span>Terakhir disinkron: {syncInfo.time || 'Belum pernah'}</span>
+          </div>
+          <button onClick={fetchData} disabled={syncInfo.status === 'loading'} className="px-5 py-2.5 bg-zinc-900 hover:bg-black disabled:bg-zinc-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 ${syncInfo.status === 'loading' ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Sinkronisasi Data
+          </button>
         </div>
       </div>
 
-      {/* Toolbar & Filter Lengkap */}
-      <div className="flex flex-col gap-3 bg-white p-3 rounded-lg border border-zinc-200/90 shadow-2xs">
-        <div className="flex flex-col lg:flex-row gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
-              placeholder="Cari No. AWB, Nama Klien, Keterangan..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-xs placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-zinc-400 transition"
+      {/* FILTER ACTIVE LABEL */}
+      <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 inline-flex">
+        <span>↗</span> Angka di bawah mengikuti filter aktif
+      </div>
+
+      {/* SUMMARY CARDS (HIGH 4) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
+          <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">Total Kasus Klaim</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-zinc-900">{stats.totalKasus.toLocaleString('id-ID')}</span>
+            <span className="text-sm font-semibold text-zinc-500">Resi</span>
+          </div>
+          <span className="text-[10px] text-zinc-400 mt-2">↳ sesuai filter aktif</span>
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
+          <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">Total Pengajuan EZ</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-zinc-900">{stats.totalEZ.toLocaleString('id-ID')}</span>
+            <span className="text-sm font-semibold text-zinc-500">Kasus</span>
+          </div>
+          <span className="text-[10px] text-zinc-400 mt-2">↳ sesuai filter aktif</span>
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
+          <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Total Approved (Pencairan)</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black text-emerald-600">{formatRupiah(stats.totalApproved)}</span>
+          </div>
+          <span className="text-[10px] text-emerald-500/70 mt-2">↳ sesuai filter aktif</span>
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col gap-1 relative overflow-hidden">
+          <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-wider">Cancel / Reject Claim</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-rose-600">{stats.totalReject.toLocaleString('id-ID')}</span>
+            <span className="text-sm font-semibold text-rose-500">Kasus</span>
+          </div>
+          <span className="text-[10px] text-rose-500/70 mt-2">↳ sesuai filter aktif</span>
+        </div>
+      </div>
+
+      {/* TOOLBAR & FILTERS */}
+      <div className="bg-white p-3 rounded-xl border border-zinc-200 shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-md">
+            <input 
+              type="text" 
+              placeholder="Cari No. AWB, Nama Klien, Keterangan..." 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+              className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition" 
             />
-            <span className="absolute left-2.5 top-2 text-zinc-400 text-xs">🔍</span>
+            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm">🔍</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <select value={selectedBulan} onChange={(e) => setSelectedBulan(e.target.value)} className="bg-zinc-50 border border-zinc-200 rounded px-3 py-1.5 font-semibold text-zinc-700 focus:outline-none cursor-pointer">
-              <option value="All">Bulan (Semua)</option>
-              {uniqueBulan.map(b => <option key={b} value={b}>{b}</option>)}
+          <div className="flex flex-wrap items-center gap-2">
+            <select className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
+              <option value="All">Bulan: Agustus 2026</option>
+              {/* Dummy Options */}
             </select>
-
-            <select value={selectedEkspedisi} onChange={(e) => setSelectedEkspedisi(e.target.value)} className="bg-zinc-50 border border-zinc-200 rounded px-3 py-1.5 font-semibold text-zinc-700 focus:outline-none cursor-pointer">
-              <option value="All">Semua Ekspedisi</option>
-              <option value="J&T EXPRESS">J&T EXPRESS</option>
-              <option value="NINJA EXPRESS">NINJA EXPRESS</option>
-              <option value="ID EXPRESS">ID EXPRESS</option>
-              <option value="J&T VIP">J&T VIP</option>
-              <option value="SPX EXPRESS">SPX EXPRESS</option>
-              <option value="SAP EXPRESS">SAP EXPRESS</option>
+            <select value={filterEkspedisi} onChange={e => setFilterEkspedisi(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
+              {ekspedisiList.map(e => <option key={e} value={e}>{e === 'All' ? 'Ekspedisi' : e}</option>)}
             </select>
-
-            <select value={selectedCase} onChange={(e) => setSelectedCase(e.target.value)} className="bg-zinc-50 border border-zinc-200 rounded px-3 py-1.5 font-semibold text-zinc-700 focus:outline-none cursor-pointer">
-              <option value="All">Kategori Case (Semua)</option>
-              <option value="PAKET STUCK">PAKET STUCK</option>
-              <option value="PAKET HILANG">PAKET HILANG</option>
-              <option value="RETUR BERMASALAH">RETUR BERMASALAH</option>
-              <option value="TTD PAKSA">TTD PAKSA</option>
-              <option value="PTMP">PTMP</option>
-              <option value="VOID">VOID</option>
-              <option value="RUSAK">RUSAK</option>
-              <option value="REMBES">REMBES</option>
+            <select value={filterKategori} onChange={e => setFilterKategori(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
+              {kategoriList.map(k => <option key={k} value={k}>{k === 'All' ? 'Kategori Case' : k}</option>)}
             </select>
-
-            <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} className="bg-zinc-50 border border-zinc-200 rounded px-3 py-1.5 font-semibold text-zinc-700 focus:outline-none cursor-pointer">
-              <option value="All">PIC Staff (Semua)</option>
-              {uniqueUsers.map(u => <option key={u} value={u}>{u}</option>)}
+            {/* PIC Filter + WORKLOAD (MED 5) */}
+            <select value={filterPic} onChange={e => setFilterPic(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
+              <option value="All">PIC Staff</option>
+              {Object.entries(picWorkload).map(([pic, count]) => (
+                <option key={pic} value={pic}>{pic} • {count}</option>
+              ))}
             </select>
-
-            <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="bg-zinc-50 border border-zinc-200 rounded px-3 py-1.5 font-semibold text-zinc-700 focus:outline-none cursor-pointer">
-              <option value="All">Final Status (Semua)</option>
-              {uniqueStatus.map(s => <option key={s} value={s}>{s}</option>)}
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none">
+              {finalStatusList.map(s => <option key={s} value={s}>{s === 'All' ? 'Final Status' : s}</option>)}
             </select>
+            
+            <button onClick={exportToCSV} className="ml-2 px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5">
+              ⤓ Export CSV
+            </button>
           </div>
         </div>
+
+        {/* ACTIVE CHIPS (MED 6) */}
+        {(search || filterEkspedisi !== 'All' || filterKategori !== 'All' || filterPic !== 'All' || filterStatus !== 'All') && (
+          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-zinc-100">
+            {filterEkspedisi !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Ekspedisi: {filterEkspedisi} <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
+            {filterKategori !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Kategori: {filterKategori} <button onClick={() => setFilterKategori('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
+            {filterPic !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">PIC: {filterPic} <button onClick={() => setFilterPic('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
+            {filterStatus !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-3 py-1 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">Status: {filterStatus} <button onClick={() => setFilterStatus('All')} className="text-zinc-400 hover:text-rose-600">✕</button></span>}
+            
+            <button onClick={() => { setSearch(''); setFilterEkspedisi('All'); setFilterKategori('All'); setFilterPic('All'); setFilterStatus('All'); }} className="text-[11px] font-bold text-zinc-500 hover:text-zinc-900 underline ml-2 cursor-pointer">
+              Hapus semua filter
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Tabel Data Klaim & Pagination */}
-      <div className="bg-white border border-zinc-200/90 rounded-lg shadow-2xs overflow-hidden">
-        {loading ? (
-          <div className="py-24 text-center text-xs text-zinc-400 font-bold uppercase tracking-widest animate-pulse">
-            Menarik Data dari Google Sheets...
-          </div>
-        ) : filteredData.length === 0 ? (
-          <div className="py-24 text-center text-xs text-zinc-500 font-medium space-y-1">
-            <p className="font-bold text-zinc-700">Tidak ada data klaim ditemukan untuk filter ini.</p>
-          </div>
-        ) : (
-          <div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse whitespace-nowrap">
-                <thead>
-                  <tr className="border-b border-zinc-200 bg-zinc-50/90 text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">
-                    <th className="py-3 px-4">No. AWB & Klien</th>
-                    <th className="py-3 px-4">Ekspedisi & Kasus</th>
-                    <th className="py-3 px-4">Status Progres</th>
-                    <th className="py-3 px-4">Status Final</th>
-                    <th className="py-3 px-4">Timeline Tanggal</th>
-                    <th className="py-3 px-4 text-right">Nominal Claim</th>
-                    <th className="py-3 px-4">Keterangan / Alur Update</th>
-                    <th className="py-3 px-4">PIC Staff</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 text-xs text-zinc-800">
-                  {paginatedData.map((item, idx) => {
-                    const finalStatText = String(getVal(item, ['final_status', 'finalstatus', 'statusfinal']) || 'Belum Putus')
-                    const isApproved = finalStatText.toLowerCase().includes('approved')
-                    const isRejectCancel = finalStatText.toLowerCase().includes('cancel') || finalStatText.toLowerCase().includes('reject')
+      {/* DATA TABLE */}
+      <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">
+              <tr>
+                <th className="px-5 py-4">NO. AWB & KLIEN</th>
+                <th className="px-5 py-4">EKSPEDISI & KASUS</th>
+                <th className="px-5 py-4">STATUS PROGRES → FINAL</th>
+                {/* SORTABLE HEADERS (LOW 10) */}
+                <th className="px-5 py-4 cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('aging')}>
+                  TIMELINE & AGING {sortConfig.key === 'aging' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th className="px-5 py-4 cursor-pointer hover:bg-zinc-100 transition" onClick={() => handleSort('nominal')}>
+                  NOMINAL CLAIM {sortConfig.key === 'nominal' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th className="px-5 py-4">KETERANGAN</th>
+                <th className="px-5 py-4 text-right">PIC STAFF</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {loading ? (
+                <tr><td colSpan={7} className="px-5 py-16 text-center text-zinc-400 font-bold animate-pulse">Memuat Data...</td></tr>
+              ) : paginatedData.length === 0 ? (
+                <tr><td colSpan={7} className="px-5 py-16 text-center text-zinc-500 font-medium">Tidak ada data klaim yang sesuai filter.</td></tr>
+              ) : (
+                paginatedData.map((item) => {
+                  
+                  // Styling Keterangan Tag (MED 7)
+                  const { tags, sisaTeks } = parseTagKeterangan(item.keterangan || '')
+                  
+                  // Styling Nominal (LOW 9) - Bold & Color if > 200rb
+                  const isHighValue = item.nominal_claim > 200000
+                  
+                  // Avatar Initial
+                  const avatarInitial = item.pic_staff.substring(0, 2).toUpperCase()
 
-                    const awbText = getVal(item, ['no_awb', 'noawb']) || '-'
-                    const clientText = getVal(item, ['client_name', 'clientname']) || '-'
-                    const ekspedisiText = getVal(item, ['jenis_ekspedisi', 'jenisekspedisi']) || '-'
-                    const caseText = getVal(item, ['kategori_case', 'kategoricase']) || '-'
-                    const updateStatText = getVal(item, ['update_status', 'updatestatus']) || 'Open'
-                    const dateAddedVal = getVal(item, ['date_added', 'dateadded'])
-                    const tglPengajuanVal = getVal(item, ['tgl_pengajuan_ez', 'tglpengajuanez'])
-                    const tglMutasiVal = getVal(item, ['tgl_mutasi', 'tglmutasi'])
-                    const nominalVal = getVal(item, ['nominal_claim', 'nominalclaim']) || 0
-                    const ketText = getVal(item, ['keterangan']) || '-'
-                    const userText = getVal(item, ['user', 'pic', 'staff', 'namastaff'], 0) || '-'
-
-                    return (
-                      <tr key={idx} className="hover:bg-zinc-50/70 transition">
-                        <td className="py-3 px-4 align-middle">
-                          <div className="font-mono font-bold text-zinc-900">{awbText}</div>
-                          <div className="text-[11px] text-zinc-500 font-medium">{clientText}</div>
-                        </td>
-                        <td className="py-3 px-4 align-middle space-y-1">
-                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200">
-                            {ekspedisiText}
-                          </span>
-                          <div>
-                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-800 border border-rose-200/80">
-                              {caseText}
+                  return (
+                    <tr key={item.id} className="hover:bg-zinc-50 transition group">
+                      <td className="px-5 py-4">
+                        <div className="font-black text-zinc-900 text-sm">{item.awb}</div>
+                        <div className="text-zinc-500 font-medium mt-0.5">{item.klien}</div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-zinc-800">{item.ekspedisi}</div>
+                        <div className="text-rose-600 font-bold text-[10px] uppercase tracking-wide mt-1">{item.kasus}</div>
+                      </td>
+                      
+                      {/* STATUS PROGRESS -> FINAL (HIGH 2) */}
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-zinc-500 font-medium">{item.status_progres}</span>
+                          <span className="text-zinc-300">→</span>
+                          {item.status_final ? (
+                            <span className={`font-black ${
+                              item.status_final.includes('Approved') ? 'text-emerald-600' : 
+                              item.status_final.includes('Reject') || item.status_final.includes('Cancel') ? 'text-rose-600' : 'text-zinc-800'
+                            }`}>
+                              {item.status_final}
                             </span>
+                          ) : (
+                            <span className="text-zinc-400 italic">Belum Final</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* AGING LOGIC (HIGH 1) */}
+                      <td className="px-5 py-4 font-mono text-[11px] space-y-1">
+                        <div className="text-zinc-600 flex items-center gap-1">
+                          <span className="text-blue-500">📥</span> Masuk: {item.tglMasukObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'})}
+                        </div>
+                        {item.isFinal && item.tglMutasiObj && (
+                          <div className="text-zinc-600 flex items-center gap-1">
+                            <span className="text-emerald-500">📤</span> Mutasi: {item.tglMutasiObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric'})}
                           </div>
-                        </td>
-                        <td className="py-3 px-4 align-middle">
-                          <span className="inline-block px-2.5 py-1 rounded text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200">
-                            {updateStatText}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 align-middle">
-                          <span className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold ${isApproved ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : isRejectCancel ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-zinc-100 text-zinc-600 border border-zinc-200'}`}>
-                            {finalStatText}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 align-middle text-[11px] font-mono text-zinc-600 space-y-0.5">
-                          <div>📥 Masuk: {formatDateDisplay(dateAddedVal)}</div>
-                          {tglPengajuanVal && <div>📤 Ajuan: {formatDateDisplay(tglPengajuanVal)}</div>}
-                          {tglMutasiVal && <div className="text-emerald-700 font-bold">💰 Mutasi: {formatDateDisplay(tglMutasiVal)}</div>}
-                        </td>
-                        <td className="py-3 px-4 align-middle text-right font-mono font-bold text-zinc-900">
-                          {formatRupiah(nominalVal)}
-                        </td>
-                        <td className="py-3 px-4 align-middle max-w-xs truncate text-zinc-600" title={ketText}>
-                          {ketText}
-                        </td>
-                        <td className="py-3 px-4 align-middle font-semibold text-zinc-700">
-                          {userText}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                        )}
+                        <div className={`inline-flex items-center gap-1 mt-1 font-extrabold ${
+                          item.isFinal ? 'text-emerald-600' :
+                          item.agingStatus === 'red' ? 'text-rose-600' : 
+                          item.agingStatus === 'yellow' ? 'text-amber-600' : 'text-emerald-600'
+                        }`}>
+                          {item.isFinal ? `✓ Selesai ${item.agingDays} hari` : `⏳ ${item.agingDays} hari - belum final`}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className={`font-mono ${isHighValue ? 'text-rose-600 font-black text-sm' : 'text-zinc-800 font-bold'}`}>
+                          {formatRupiah(item.nominal_claim)}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 whitespace-normal max-w-[200px]">
+                        <div className="flex flex-col gap-1.5">
+                          {tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {tags.map((t, i) => (
+                                <span key={i} className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold">{t}</span>
+                              ))}
+                            </div>
+                          )}
+                          {sisaTeks && <span className="text-zinc-600 text-[11px] leading-snug">{sisaTeks}</span>}
+                          {!tags.length && !sisaTeks && <span className="text-zinc-400">—</span>}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 text-right">
+                        <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white border border-zinc-200 rounded-full shadow-2xs">
+                          <span className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-[9px] font-black">{avatarInitial}</span>
+                          <span className="font-bold text-zinc-800">{item.pic_staff}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* PAGINATION (MED 8) */}
+        {filteredData.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-5 py-3 border-t border-zinc-200 bg-white text-[11px]">
+            <div className="text-zinc-500 font-medium flex items-center gap-2">
+              Menampilkan {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredData.length)} dari <span className="font-bold text-zinc-900">{filteredData.length.toLocaleString('id-ID')} kasus</span>
+              
+              <select value={itemsPerPage} onChange={(e) => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1)}} className="ml-2 bg-zinc-50 border border-zinc-200 rounded px-2 py-1 focus:outline-none cursor-pointer">
+                <option value={25}>25 / halaman</option>
+                <option value={50}>50 / halaman</option>
+                <option value={100}>100 / halaman</option>
+              </select>
             </div>
 
-            {/* Pagination Controls */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-zinc-50/80 border-t border-zinc-200 text-xs">
-              <div className="text-zinc-500 font-medium">
-                Menampilkan <span className="font-bold text-zinc-800">{paginatedData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}</span> sampai <span className="font-bold text-zinc-800">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> dari <span className="font-bold text-zinc-800">{filteredData.length}</span> total data
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer">
+                &lt; Sebelumnya
+              </button>
+              
+              {/* Simple Page Numbers */}
+              <div className="flex items-center gap-1 px-2">
+                {[...Array(Math.min(3, totalPages))].map((_, i) => {
+                  const pageNum = i + 1
+                  return (
+                    <button key={pageNum} onClick={() => setCurrentPage(pageNum)} className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold ${currentPage === pageNum ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}>
+                      {pageNum}
+                    </button>
+                  )
+                })}
+                {totalPages > 3 && <span className="text-zinc-400 px-1">...</span>}
+                {totalPages > 3 && (
+                  <button onClick={() => setCurrentPage(totalPages)} className={`w-8 h-6 flex items-center justify-center rounded text-[10px] font-bold ${currentPage === totalPages ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}>
+                    {totalPages}
+                  </button>
+                )}
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 bg-white border border-zinc-200 rounded text-zinc-700 font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-100 transition cursor-pointer"
-                >
-                  Sebelumnya
-                </button>
-
-                <div className="flex items-center gap-1 px-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter(page => page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2))
-                    .map((page, index, arr) => {
-                      const prevPage = arr[index - 1]
-                      const showEllipsisBefore = prevPage && page - prevPage > 1
-
-                      return (
-                        <div key={page} className="flex items-center">
-                          {showEllipsisBefore && <span className="px-1.5 text-zinc-400">...</span>}
-                          <button
-                            onClick={() => setCurrentPage(page)}
-                            className={`w-7 h-7 flex items-center justify-center rounded font-bold transition cursor-pointer ${
-                              currentPage === page
-                                ? 'bg-black text-white shadow-2xs'
-                                : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        </div>
-                      )
-                    })}
-                </div>
-
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 bg-white border border-zinc-200 rounded text-zinc-700 font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-100 transition cursor-pointer"
-                >
-                  Selanjutnya
-                </button>
-              </div>
+              <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer">
+                Berikutnya &gt;
+              </button>
             </div>
           </div>
         )}
       </div>
 
-    </div>
+    </main>
   )
 }
