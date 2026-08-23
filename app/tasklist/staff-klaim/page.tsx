@@ -108,36 +108,6 @@ const generateBulanFromDate = (dateString: string): string => {
 export default function TrackerKlaimDashboard() {
   const router = useRouter()
 
-  // --- USER BAR STATE ---
-  const [userInfo, setUserInfo] = useState({ email: '', role: '' })
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const email = localStorage.getItem('userEmail') || ''
-      const role = localStorage.getItem('userRole') || ''
-      setUserInfo({ email, role })
-    }
-  }, [])
-
-  const handleLogout = () => {
-    if (confirm('Yakin ingin logout?')) {
-      localStorage.removeItem('isLoggedIn')
-      localStorage.removeItem('userRole')
-      localStorage.removeItem('userEmail')
-      router.push('/')
-    }
-  }
-
-  const formatRole = (role: string) => {
-    const roleMap: Record<string, string> = {
-      'superadmin': 'SUPERADMIN',
-      'tlqc': 'TL QC',
-      'tlog': 'TL OG',
-      'staff_klaim': 'STAFF KLAIM'
-    }
-    return roleMap[role.toLowerCase()] || role.toUpperCase()
-  }
-
   // --- STATE ---
   const [data, setData] = useState<KlaimData[]>([])
   const [loading, setLoading] = useState(true)
@@ -612,26 +582,6 @@ export default function TrackerKlaimDashboard() {
 
   return (
     <>
-      {/* ✅ USER BAR */}
-      <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-zinc-200">
-        <div className="flex items-center gap-3">
-          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span className="text-sm font-medium text-zinc-700">{userInfo.email || 'Loading...'}</span>
-          <span className="px-2.5 py-1 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-wider">
-            {formatRole(userInfo.role)}
-          </span>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="p-2 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-          title="Logout"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-        </button>
-      </div>
-
       <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 bg-zinc-50/50 min-h-screen pb-20">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
