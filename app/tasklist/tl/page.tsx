@@ -551,13 +551,18 @@ export default function TeamLeaderConsole() {
         </div>
       </div>
 
+      {/* Banner Notifikasi Real-Time Dinamis & Bersih */}
       {(stats.urgent > 0 || stats.overdue > 0) && (
         <div className="bg-zinc-900 text-amber-300 px-4 py-3 rounded-lg text-xs font-bold flex items-center justify-between shadow-md border-l-4 border-amber-400">
           <div className="flex items-center gap-2">
             <span>🔥</span>
-            <span>Perhatian: Ada {stats.urgent} task urgent dan {stats.overdue} task overdue yang memerlukan tindakan segera!</span>
+            <span>
+              Perhatian: Ada {stats.urgent > 0 ? `${stats.urgent} task urgent` : ''}
+              {stats.urgent > 0 && stats.overdue > 0 ? ' dan ' : ''}
+              {stats.overdue > 0 ? `${stats.overdue} task overdue` : ''} yang memerlukan tindakan segera!
+            </span>
           </div>
-          <button onClick={() => setActiveBadgeFilter('Urgent')} className="text-white underline text-[11px] hover:text-amber-200 cursor-pointer">
+          <button onClick={() => setActiveBadgeFilter(stats.urgent > 0 ? 'Urgent' : 'Overdue')} className="text-white underline text-[11px] hover:text-amber-200 cursor-pointer">
             Filter Task Terkait
           </button>
         </div>
