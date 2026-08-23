@@ -108,6 +108,36 @@ const generateBulanFromDate = (dateString: string): string => {
 export default function TrackerKlaimDashboard() {
   const router = useRouter()
 
+  // --- USER BAR STATE ---
+  const [userInfo, setUserInfo] = useState({ email: '', role: '' })
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const email = localStorage.getItem('userEmail') || ''
+      const role = localStorage.getItem('userRole') || ''
+      setUserInfo({ email, role })
+    }
+  }, [])
+
+  const handleLogout = () => {
+    if (confirm('Yakin ingin logout?')) {
+      localStorage.removeItem('isLoggedIn')
+      localStorage.removeItem('userRole')
+      localStorage.removeItem('userEmail')
+      router.push('/')
+    }
+  }
+
+  const formatRole = (role: string) => {
+    const roleMap: Record<string, string> = {
+      'superadmin': 'SUPERADMIN',
+      'tlqc': 'TL QC',
+      'tlog': 'TL OG',
+      'staff_klaim': 'STAFF KLAIM'
+    }
+    return roleMap[role.toLowerCase()] || role.toUpperCase()
+  }
+
   // --- STATE ---
   const [data, setData] = useState<KlaimData[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,7 +151,7 @@ export default function TrackerKlaimDashboard() {
   const [filterPic, setFilterPic] = useState('All')
   const [filterStatus, setFilterStatus] = useState('All')
   const [filterAging, setFilterAging] = useState('All')
-  const [sortBy, setSortBy] = useState('default') // Sorting dropdown
+  const [sortBy, setSortBy] = useState('default')
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -395,7 +425,6 @@ export default function TrackerKlaimDashboard() {
       result = result.filter(d => d.user.toLowerCase() === filterPic.toLowerCase())
     }
 
-    // ✅ Filter Status - "Process Claim" = klaim yang belum final
     if (filterStatus !== 'All') {
       if (filterStatus === 'Process Claim') {
         result = result.filter(d => {
@@ -411,7 +440,6 @@ export default function TrackerKlaimDashboard() {
       }
     }
 
-    // Filter Aging (TIDAK DIUBAH - tetap fleksibel untuk semua case)
     if (filterAging !== 'All') {
       result = result.filter(d => {
         if (filterAging === 'Closed') {
@@ -430,7 +458,6 @@ export default function TrackerKlaimDashboard() {
       })
     }
 
-    // ✅ Sorting hanya untuk Aging (Terlama / Terbaru)
     if (sortBy === 'aging-oldest') {
       result.sort((a, b) => b.agingDays - a.agingDays)
     } else if (sortBy === 'aging-newest') {
@@ -584,478 +611,499 @@ export default function TrackerKlaimDashboard() {
   }
 
   return (
-    <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 bg-zinc-50/50 min-h-screen pb-20">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900">Tracker & Monitoring Klaim</h1>
-          <p className="text-sm text-zinc-500 mt-1">Dashboard Monitoring Operasional dan Resolusi Klaim.</p>
+    <>
+      {/* ✅ USER BAR */}
+      <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-zinc-200">
+        <div className="flex items-center gap-3">
+          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span className="text-sm font-medium text-zinc-700">{userInfo.email || 'Loading...'}</span>
+          <span className="px-2.5 py-1 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-wider">
+            {formatRole(userInfo.role)}
+          </span>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-600">
-            {syncInfo.status === 'loading' && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>}
-            {syncInfo.status === 'success' && <span className="w-2 h-2 rounded-full bg-emerald-500"></span>}
-            {syncInfo.status === 'error' && <span className="w-2 h-2 rounded-full bg-rose-500"></span>}
-            <span>Terakhir disinkron: {syncInfo.time || 'Belum pernah'}</span>
+        <button
+          onClick={handleLogout}
+          className="p-2 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+          title="Logout"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+
+      <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 bg-zinc-50/50 min-h-screen pb-20">
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900">Tracker & Monitoring Klaim</h1>
+            <p className="text-sm text-zinc-500 mt-1">Dashboard Monitoring Operasional dan Resolusi Klaim.</p>
           </div>
-          <button
-            onClick={fetchData}
-            disabled={syncInfo.status === 'loading'}
-            className="px-5 py-2.5 bg-zinc-900 hover:bg-black disabled:bg-zinc-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className={`w-4 h-4 ${syncInfo.status === 'loading' ? 'animate-spin' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.5}
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-600">
+              {syncInfo.status === 'loading' && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>}
+              {syncInfo.status === 'success' && <span className="w-2 h-2 rounded-full bg-emerald-500"></span>}
+              {syncInfo.status === 'error' && <span className="w-2 h-2 rounded-full bg-rose-500"></span>}
+              <span>Terakhir disinkron: {syncInfo.time || 'Belum pernah'}</span>
+            </div>
+            <button
+              onClick={fetchData}
+              disabled={syncInfo.status === 'loading'}
+              className="px-5 py-2.5 bg-zinc-900 hover:bg-black disabled:bg-zinc-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className={`w-4 h-4 ${syncInfo.status === 'loading' ? 'animate-spin' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              Sinkronisasi Data
+            </button>
+          </div>
+        </div>
+
+        {/* KPI CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+          <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
+            <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
+            <div>
+              <div className="text-xl font-black text-zinc-900">{stats.totalKasus.toLocaleString('id-ID')} Resi</div>
+              <div className="text-sm font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.totalKasusNominal)}</div>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
+            <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Pengajuan Klaim</span>
+            <div>
+              <div className="text-xl font-black text-zinc-900">{stats.pengajuanResi.toLocaleString('id-ID')} Resi</div>
+              <div className="text-sm font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.pengajuanNominal)}</div>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex flex-col justify-between gap-2">
+            <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Total Approved (Pencairan)</span>
+            <div>
+              <div className="text-lg font-black text-emerald-600">{formatRupiah(stats.approvedNominal)}</div>
+              <div className="text-sm font-bold text-emerald-700 mt-0.5">{stats.approvedResi.toLocaleString('id-ID')} Resi</div>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col justify-between gap-2">
+            <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-wider">Cancel / Reject Claim</span>
+            <div>
+              <div className="text-xl font-black text-rose-600">{stats.cancelRejectResi.toLocaleString('id-ID')} Resi</div>
+              <div className="text-sm font-bold text-rose-700 mt-0.5">{formatRupiah(stats.cancelRejectNominal)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* TOOLBAR & FILTERS */}
+        <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            {/* Search */}
+            <div className="relative flex-1 max-w-md">
+              <input
+                type="text"
+                placeholder="Cari No. AWB, Nama Klien, Keterangan..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition"
               />
-            </svg>
-            Sinkronisasi Data
-          </button>
-        </div>
-      </div>
+              <span className="absolute left-3 top-2.5 text-zinc-400 text-sm">🔍</span>
+            </div>
 
-      {/* KPI CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
-        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
-          <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Kasus Klaim</span>
-          <div>
-            <div className="text-xl font-black text-zinc-900">{stats.totalKasus.toLocaleString('id-ID')} Resi</div>
-            <div className="text-sm font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.totalKasusNominal)}</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between gap-2">
-          <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Total Pengajuan Klaim</span>
-          <div>
-            <div className="text-xl font-black text-zinc-900">{stats.pengajuanResi.toLocaleString('id-ID')} Resi</div>
-            <div className="text-sm font-bold text-zinc-700 mt-0.5">{formatRupiah(stats.pengajuanNominal)}</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex flex-col justify-between gap-2">
-          <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Total Approved (Pencairan)</span>
-          <div>
-            <div className="text-lg font-black text-emerald-600">{formatRupiah(stats.approvedNominal)}</div>
-            <div className="text-sm font-bold text-emerald-700 mt-0.5">{stats.approvedResi.toLocaleString('id-ID')} Resi</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col justify-between gap-2">
-          <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-wider">Cancel / Reject Claim</span>
-          <div>
-            <div className="text-xl font-black text-rose-600">{stats.cancelRejectResi.toLocaleString('id-ID')} Resi</div>
-            <div className="text-sm font-bold text-rose-700 mt-0.5">{formatRupiah(stats.cancelRejectNominal)}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* TOOLBAR & FILTERS */}
-      <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-          {/* Search */}
-          <div className="relative flex-1 max-w-md">
-            <input
-              type="text"
-              placeholder="Cari No. AWB, Nama Klien, Keterangan..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition"
-            />
-            <span className="absolute left-3 top-2.5 text-zinc-400 text-sm">🔍</span>
-          </div>
-
-          {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-            <select
-              value={filterBulan}
-              onChange={e => setFilterBulan(e.target.value)}
-              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
-            >
-              {bulanList.map(b => (
-                <option key={b} value={b}>
-                  {b === 'All' ? 'Bulan' : b === '(Tanpa Bulan)' ? '⚠️ Tanpa Bulan' : b}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filterEkspedisi}
-              onChange={e => setFilterEkspedisi(e.target.value)}
-              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
-            >
-              {ekspedisiList.map(e => (
-                <option key={e} value={e}>
-                  {e === 'All' ? 'Ekspedisi' : e}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filterKategori}
-              onChange={e => setFilterKategori(e.target.value)}
-              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
-            >
-              {kategoriList.map(k => (
-                <option key={k} value={k}>
-                  {k === 'All' ? 'Kategori Case' : k}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filterPic}
-              onChange={e => setFilterPic(e.target.value)}
-              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
-            >
-              <option value="All">PIC Staff</option>
-              {Object.entries(picWorkload)
-                .sort((a, b) => b[1] - a[1])
-                .map(([pic, count]) => (
-                  <option key={pic} value={pic}>
-                    {pic} · {count}
+            {/* Filter Dropdowns */}
+            <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+              <select
+                value={filterBulan}
+                onChange={e => setFilterBulan(e.target.value)}
+                className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+              >
+                {bulanList.map(b => (
+                  <option key={b} value={b}>
+                    {b === 'All' ? 'Bulan' : b === '(Tanpa Bulan)' ? '️ Tanpa Bulan' : b}
                   </option>
                 ))}
-            </select>
+              </select>
 
-            <select
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
-            >
-              {finalStatusList.map(s => (
-                <option key={s} value={s}>
-                  {statusLabels[s]}
-                </option>
-              ))}
-            </select>
+              <select
+                value={filterEkspedisi}
+                onChange={e => setFilterEkspedisi(e.target.value)}
+                className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+              >
+                {ekspedisiList.map(e => (
+                  <option key={e} value={e}>
+                    {e === 'All' ? 'Ekspedisi' : e}
+                  </option>
+                ))}
+              </select>
 
-            <select
-              value={filterAging}
-              onChange={e => setFilterAging(e.target.value)}
-              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
-            >
-              {agingList.map(a => (
-                <option key={a} value={a}>
-                  {agingLabels[a]}
-                </option>
-              ))}
-            </select>
+              <select
+                value={filterKategori}
+                onChange={e => setFilterKategori(e.target.value)}
+                className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+              >
+                {kategoriList.map(k => (
+                  <option key={k} value={k}>
+                    {k === 'All' ? 'Kategori Case' : k}
+                  </option>
+                ))}
+              </select>
 
-            {/* ✅ Dropdown Urutkan (Baru) */}
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
-              className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
-            >
-              {sortOptions.map(s => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              <select
+                value={filterPic}
+                onChange={e => setFilterPic(e.target.value)}
+                className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+              >
+                <option value="All">PIC Staff</option>
+                {Object.entries(picWorkload)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([pic, count]) => (
+                    <option key={pic} value={pic}>
+                      {pic} · {count}
+                    </option>
+                  ))}
+              </select>
 
-            <button
-              onClick={exportToCSV}
-              className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5"
-            >
-              ⤓ Export CSV
-            </button>
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+              >
+                {finalStatusList.map(s => (
+                  <option key={s} value={s}>
+                    {statusLabels[s]}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={filterAging}
+                onChange={e => setFilterAging(e.target.value)}
+                className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+              >
+                {agingList.map(a => (
+                  <option key={a} value={a}>
+                    {agingLabels[a]}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-bold text-zinc-800 cursor-pointer focus:outline-none hover:border-zinc-300 transition"
+              >
+                {sortOptions.map(s => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={exportToCSV}
+                className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5"
+              >
+                 Export CSV
+              </button>
+            </div>
           </div>
+
+          {/* Active Filter Chips */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-zinc-100">
+              {filterBulan !== 'All' && (
+                <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                  Bulan: {filterBulan === '(Tanpa Bulan)' ? '⚠️ Tanpa Bulan' : filterBulan}
+                  <button onClick={() => setFilterBulan('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
+                </span>
+              )}
+              {filterEkspedisi !== 'All' && (
+                <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                  Ekspedisi: {filterEkspedisi}
+                  <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
+                </span>
+              )}
+              {filterKategori !== 'All' && (
+                <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                  Kategori: {filterKategori}
+                  <button onClick={() => setFilterKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
+                </span>
+              )}
+              {filterPic !== 'All' && (
+                <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                  PIC: {filterPic} · {picWorkload[filterPic] || 0}
+                  <button onClick={() => setFilterPic('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
+                </span>
+              )}
+              {filterStatus !== 'All' && (
+                <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                  Status: {statusLabels[filterStatus] || filterStatus}
+                  <button onClick={() => setFilterStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold"></button>
+                </span>
+              )}
+              {filterAging !== 'All' && (
+                <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                  Aging: {agingLabels[filterAging] || filterAging}
+                  <button onClick={() => setFilterAging('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
+                </span>
+              )}
+              {sortBy !== 'default' && (
+                <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                  Urutkan: {sortLabels[sortBy] || sortBy}
+                  <button onClick={() => setSortBy('default')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
+                </span>
+              )}
+
+              <button
+                onClick={clearAllFilters}
+                className="text-[11px] font-bold text-zinc-500 hover:text-zinc-900 underline ml-2 cursor-pointer"
+              >
+                Hapus semua filter
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Active Filter Chips */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-zinc-100">
-            {filterBulan !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
-                Bulan: {filterBulan === '(Tanpa Bulan)' ? '⚠️ Tanpa Bulan' : filterBulan}
-                <button onClick={() => setFilterBulan('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
-              </span>
-            )}
-            {filterEkspedisi !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
-                Ekspedisi: {filterEkspedisi}
-                <button onClick={() => setFilterEkspedisi('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
-              </span>
-            )}
-            {filterKategori !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
-                Kategori: {filterKategori}
-                <button onClick={() => setFilterKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
-              </span>
-            )}
-            {filterPic !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
-                PIC: {filterPic} · {picWorkload[filterPic] || 0}
-                <button onClick={() => setFilterPic('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
-              </span>
-            )}
-            {filterStatus !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
-                Status: {statusLabels[filterStatus] || filterStatus}
-                <button onClick={() => setFilterStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
-              </span>
-            )}
-            {filterAging !== 'All' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
-                Aging: {agingLabels[filterAging] || filterAging}
-                <button onClick={() => setFilterAging('All')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
-              </span>
-            )}
-            {sortBy !== 'default' && (
-              <span className="bg-zinc-100 border border-zinc-200 px-3 py-1.5 rounded-full text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
-                Urutkan: {sortLabels[sortBy] || sortBy}
-                <button onClick={() => setSortBy('default')} className="text-zinc-400 hover:text-rose-600 font-bold">✕</button>
-              </span>
-            )}
-
-            <button
-              onClick={clearAllFilters}
-              className="text-[11px] font-bold text-zinc-500 hover:text-zinc-900 underline ml-2 cursor-pointer"
-            >
-              Hapus semua filter
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* DATA TABLE */}
-      <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-center text-xs whitespace-nowrap">
-            <thead className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">
-              <tr>
-                <th className="px-5 py-4 text-center">NO. AWB & KLIEN</th>
-                <th className="px-5 py-4 text-center">EKSPEDISI & KASUS</th>
-                <th className="px-5 py-4 text-center">STATUS PROGRES → FINAL</th>
-                <th className="px-5 py-4 text-center">TIMELINE & AGING</th>
-                <th className="px-5 py-4 text-center">NOMINAL CLAIM</th>
-                <th className="px-5 py-4 text-center">KETERANGAN</th>
-                <th className="px-5 py-4 text-center">PIC STAFF</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {loading ? (
+        {/* DATA TABLE */}
+        <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+          <div className="overflow-x-auto">
+            <table className="w-full text-center text-xs whitespace-nowrap">
+              <thead className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-zinc-400 font-bold animate-pulse">
-                    Memuat Data dari Google Sheets...
-                  </td>
+                  <th className="px-5 py-4 text-center">NO. AWB & KLIEN</th>
+                  <th className="px-5 py-4 text-center">EKSPEDISI & KASUS</th>
+                  <th className="px-5 py-4 text-center">STATUS PROGRES → FINAL</th>
+                  <th className="px-5 py-4 text-center">TIMELINE & AGING</th>
+                  <th className="px-5 py-4 text-center">NOMINAL CLAIM</th>
+                  <th className="px-5 py-4 text-center">KETERANGAN</th>
+                  <th className="px-5 py-4 text-center">PIC STAFF</th>
                 </tr>
-              ) : paginatedData.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-zinc-500 font-medium">
-                    Tidak ada data klaim yang sesuai filter.
-                  </td>
-                </tr>
-              ) : (
-                paginatedData.map(item => {
-                  const { tags, sisaTeks } = parseTagKeterangan(item.keterangan || '')
-                  const isHighValue = item.nominal_claim > 200000
-                  const avatarInitial = item.user.substring(0, 2).toUpperCase()
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-16 text-center text-zinc-400 font-bold animate-pulse">
+                      Memuat Data dari Google Sheets...
+                    </td>
+                  </tr>
+                ) : paginatedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-16 text-center text-zinc-500 font-medium">
+                      Tidak ada data klaim yang sesuai filter.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedData.map(item => {
+                    const { tags, sisaTeks } = parseTagKeterangan(item.keterangan || '')
+                    const isHighValue = item.nominal_claim > 200000
+                    const avatarInitial = item.user.substring(0, 2).toUpperCase()
 
-                  return (
-                    <tr key={item.id} className="hover:bg-zinc-50 transition group align-middle">
-                      <td className="px-5 py-4 text-center">
-                        <div className="font-black text-zinc-900 text-sm">{item.no_awb}</div>
-                        <div className="text-zinc-500 font-medium mt-0.5">{item.client_name}</div>
-                      </td>
-                      <td className="px-5 py-4 text-center">
-                        <div className="font-bold text-zinc-800">{item.jenis_ekspedisi}</div>
-                        <div className="text-rose-600 font-bold text-[10px] uppercase tracking-wide mt-1">
-                          {item.kategori_case}
-                        </div>
-                      </td>
+                    return (
+                      <tr key={item.id} className="hover:bg-zinc-50 transition group align-middle">
+                        <td className="px-5 py-4 text-center">
+                          <div className="font-black text-zinc-900 text-sm">{item.no_awb}</div>
+                          <div className="text-zinc-500 font-medium mt-0.5">{item.client_name}</div>
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <div className="font-bold text-zinc-800">{item.jenis_ekspedisi}</div>
+                          <div className="text-rose-600 font-bold text-[10px] uppercase tracking-wide mt-1">
+                            {item.kategori_case}
+                          </div>
+                        </td>
 
-                      <td className="px-5 py-4 text-center">
-                        <div className="inline-flex items-center justify-center gap-2">
-                          <span className="text-zinc-500 font-medium">{item.update_status}</span>
-                          <span className="text-zinc-300">→</span>
-                          {item.final_status ? (
-                            <span
-                              className={`font-black ${
-                                item.final_status.toLowerCase().includes('approved')
-                                  ? 'text-emerald-600'
-                                  : item.final_status.toLowerCase().includes('reject') ||
-                                    item.final_status.toLowerCase().includes('cancel')
-                                  ? 'text-rose-600'
-                                  : 'text-zinc-800'
-                              }`}
-                            >
-                              {item.final_status}
-                            </span>
-                          ) : (
-                            <span className="text-zinc-400 italic">Pengajuan Klaim</span>
-                          )}
-                        </div>
-                      </td>
+                        <td className="px-5 py-4 text-center">
+                          <div className="inline-flex items-center justify-center gap-2">
+                            <span className="text-zinc-500 font-medium">{item.update_status}</span>
+                            <span className="text-zinc-300">→</span>
+                            {item.final_status ? (
+                              <span
+                                className={`font-black ${
+                                  item.final_status.toLowerCase().includes('approved')
+                                    ? 'text-emerald-600'
+                                    : item.final_status.toLowerCase().includes('reject') ||
+                                      item.final_status.toLowerCase().includes('cancel')
+                                    ? 'text-rose-600'
+                                    : 'text-zinc-800'
+                                }`}
+                              >
+                                {item.final_status}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 italic">Pengajuan Klaim</span>
+                            )}
+                          </div>
+                        </td>
 
-                      <td className="px-5 py-4 text-center font-mono text-[11px] space-y-1">
-                        <div className="text-zinc-600 flex items-center justify-center gap-1">
-                          <span className="text-blue-500">📥</span> Masuk:{' '}
-                          {!isNaN(item.tglMasukObj.getTime())
-                            ? item.tglMasukObj.toLocaleDateString('id-ID', {
+                        <td className="px-5 py-4 text-center font-mono text-[11px] space-y-1">
+                          <div className="text-zinc-600 flex items-center justify-center gap-1">
+                            <span className="text-blue-500">📥</span> Masuk:{' '}
+                            {!isNaN(item.tglMasukObj.getTime())
+                              ? item.tglMasukObj.toLocaleDateString('id-ID', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })
+                              : '-'}
+                          </div>
+                          {item.isFinal && !item.isClosed && item.tglMutasiObj && !isNaN(item.tglMutasiObj.getTime()) && (
+                            <div className="text-zinc-600 flex items-center justify-center gap-1">
+                              <span className="text-emerald-500">📤</span> Mutasi:{' '}
+                              {item.tglMutasiObj.toLocaleDateString('id-ID', {
                                 day: '2-digit',
                                 month: 'short',
                                 year: 'numeric'
-                              })
-                            : '-'}
-                        </div>
-                        {item.isFinal && !item.isClosed && item.tglMutasiObj && !isNaN(item.tglMutasiObj.getTime()) && (
-                          <div className="text-zinc-600 flex items-center justify-center gap-1">
-                            <span className="text-emerald-500">📤</span> Mutasi:{' '}
-                            {item.tglMutasiObj.toLocaleDateString('id-ID', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric'
-                            })}
-                          </div>
-                        )}
-                        <div
-                          className={`inline-flex items-center justify-center gap-1 mt-1 font-extrabold ${
-                            item.isClosed
-                              ? 'text-zinc-500'
-                              : item.isFinal
-                              ? 'text-emerald-600'
-                              : item.agingStatus === 'red'
-                              ? 'text-rose-600'
-                              : item.agingStatus === 'yellow'
-                              ? 'text-amber-600'
-                              : 'text-emerald-600'
-                          }`}
-                        >
-                          {item.isClosed
-                            ? '✓ Closed'
-                            : item.isFinal
-                            ? `✓ Selesai ${item.agingDays} Hari`
-                            : `⏳ Pengajuan Klaim (Hari Ke ${item.agingDays})`}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4 text-center">
-                        <div
-                          className={`font-mono ${
-                            isHighValue ? 'text-rose-600 font-black text-sm' : 'text-zinc-800 font-bold'
-                          }`}
-                        >
-                          {formatRupiah(item.nominal_claim)}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4 text-center whitespace-normal max-w-[200px] mx-auto">
-                        <div className="flex flex-col items-center justify-center gap-1.5">
-                          {tags.length > 0 && (
-                            <div className="flex flex-wrap justify-center gap-1">
-                              {tags.map((t, i) => (
-                                <span
-                                  key={i}
-                                  className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold"
-                                >
-                                  {t}
-                                </span>
-                              ))}
+                              })}
                             </div>
                           )}
-                          {sisaTeks && (
-                            <span className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold">
-                              {sisaTeks}
+                          <div
+                            className={`inline-flex items-center justify-center gap-1 mt-1 font-extrabold ${
+                              item.isClosed
+                                ? 'text-zinc-500'
+                                : item.isFinal
+                                ? 'text-emerald-600'
+                                : item.agingStatus === 'red'
+                                ? 'text-rose-600'
+                                : item.agingStatus === 'yellow'
+                                ? 'text-amber-600'
+                                : 'text-emerald-600'
+                            }`}
+                          >
+                            {item.isClosed
+                              ? '✓ Closed'
+                              : item.isFinal
+                              ? `✓ Selesai ${item.agingDays} Hari`
+                              : `⏳ Pengajuan Klaim (Hari Ke ${item.agingDays})`}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4 text-center">
+                          <div
+                            className={`font-mono ${
+                              isHighValue ? 'text-rose-600 font-black text-sm' : 'text-zinc-800 font-bold'
+                            }`}
+                          >
+                            {formatRupiah(item.nominal_claim)}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4 text-center whitespace-normal max-w-[200px] mx-auto">
+                          <div className="flex flex-col items-center justify-center gap-1.5">
+                            {tags.length > 0 && (
+                              <div className="flex flex-wrap justify-center gap-1">
+                                {tags.map((t, i) => (
+                                  <span
+                                    key={i}
+                                    className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold"
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {sisaTeks && (
+                              <span className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                                {sisaTeks}
+                              </span>
+                            )}
+                            {!tags.length && !sisaTeks && <span className="text-zinc-400">—</span>}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4 text-center">
+                          <div className="inline-flex items-center justify-center gap-2 px-2.5 py-1 bg-white border border-zinc-200 rounded-full shadow-2xs mx-auto">
+                            <span className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-[9px] font-black">
+                              {avatarInitial}
                             </span>
-                          )}
-                          {!tags.length && !sisaTeks && <span className="text-zinc-400">—</span>}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4 text-center">
-                        <div className="inline-flex items-center justify-center gap-2 px-2.5 py-1 bg-white border border-zinc-200 rounded-full shadow-2xs mx-auto">
-                          <span className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-[9px] font-black">
-                            {avatarInitial}
-                          </span>
-                          <span className="font-bold text-zinc-800">{item.user}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* PAGINATION */}
-        {filteredData.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-5 py-3 border-t border-zinc-200 bg-white text-[11px]">
-            <div className="text-zinc-500 font-medium flex items-center gap-2">
-              Menampilkan {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredData.length)}{' '}
-              dari <span className="font-bold text-zinc-900">{filteredData.length.toLocaleString('id-ID')} kasus</span>
-              <select
-                value={itemsPerPage}
-                onChange={e => {
-                  setItemsPerPage(Number(e.target.value))
-                  setCurrentPage(1)
-                }}
-                className="ml-2 bg-zinc-50 border border-zinc-200 rounded px-2 py-1 focus:outline-none cursor-pointer"
-              >
-                <option value={25}>25 / halaman</option>
-                <option value={50}>50 / halaman</option>
-                <option value={100}>100 / halaman</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer"
-              >
-                &lt; Sebelumnya
-              </button>
-
-              <div className="flex items-center gap-1 px-2">
-                {[...Array(Math.min(3, totalPages))].map((_, i) => {
-                  const pageNum = i + 1
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold ${
-                        currentPage === pageNum ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  )
-                })}
-                {totalPages > 3 && <span className="text-zinc-400 px-1">...</span>}
-                {totalPages > 3 && (
-                  <button
-                    onClick={() => setCurrentPage(totalPages)}
-                    className={`w-8 h-6 flex items-center justify-center rounded text-[10px] font-bold ${
-                      currentPage === totalPages ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
-                    }`}
-                  >
-                    {totalPages}
-                  </button>
+                            <span className="font-bold text-zinc-800">{item.user}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          {filteredData.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-5 py-3 border-t border-zinc-200 bg-white text-[11px]">
+              <div className="text-zinc-500 font-medium flex items-center gap-2">
+                Menampilkan {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredData.length)}{' '}
+                dari <span className="font-bold text-zinc-900">{filteredData.length.toLocaleString('id-ID')} kasus</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={e => {
+                    setItemsPerPage(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="ml-2 bg-zinc-50 border border-zinc-200 rounded px-2 py-1 focus:outline-none cursor-pointer"
+                >
+                  <option value={25}>25 / halaman</option>
+                  <option value={50}>50 / halaman</option>
+                  <option value={100}>100 / halaman</option>
+                </select>
               </div>
 
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer"
-              >
-                Berikutnya &gt;
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer"
+                >
+                  &lt; Sebelumnya
+                </button>
+
+                <div className="flex items-center gap-1 px-2">
+                  {[...Array(Math.min(3, totalPages))].map((_, i) => {
+                    const pageNum = i + 1
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold ${
+                          currentPage === pageNum ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    )
+                  })}
+                  {totalPages > 3 && <span className="text-zinc-400 px-1">...</span>}
+                  {totalPages > 3 && (
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      className={`w-8 h-6 flex items-center justify-center rounded text-[10px] font-bold ${
+                        currentPage === totalPages ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                      }`}
+                    >
+                      {totalPages}
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 bg-white border border-zinc-200 rounded text-zinc-600 font-bold disabled:opacity-40 hover:bg-zinc-50 transition cursor-pointer"
+                >
+                  Berikutnya &gt;
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </main>
+          )}
+        </div>
+      </main>
+    </>
   )
 }
