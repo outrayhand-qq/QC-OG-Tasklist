@@ -196,8 +196,7 @@ export default function TaskListLayout({
               </div>
 
               {showDropdown && (
-                <div 
-                  className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-zinc-200 py-2 z-50"
+                <div className="absolute bottom-full left-0 mb-2 w-[200px] bg-white rounded-xl shadow-lg border border-zinc-200 py-2 z-50"
                   onMouseEnter={() => {
                     if (dropdownTimeout) clearTimeout(dropdownTimeout)
                   }}

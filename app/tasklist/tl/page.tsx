@@ -182,18 +182,14 @@ const showToast = (message: string, type: 'success' | 'error' | 'info' = 'succes
     router.push('/')
   }
 
-  const handleAddFeedbackLog = async (taskId: string, newEntry: string) => {
+    const handleAddFeedbackLog = async (taskId: string, newEntry: string) => {
     const cleanEntry = newEntry.trim()
     if (!cleanEntry) return
 
     const now = new Date()
     const formatter = new Intl.DateTimeFormat('id-ID', {
       timeZone: 'Asia/Jakarta',
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
     })
     const parts = formatter.formatToParts(now)
     const day = parts.find(p => p.type === 'day')?.value
@@ -207,34 +203,29 @@ const showToast = (message: string, type: 'success' | 'error' | 'info' = 'succes
 
     const targetTask = tasks.find((t) => t.id === taskId)
     const currentFeedback = targetTask?.feedback ? targetTask.feedback.trim() : ''
-
-    const updatedFeedback = currentFeedback
-      ? `${currentFeedback}\n${logString}`
-      : `${logString}`
+    const updatedFeedback = currentFeedback ? `${currentFeedback}\n${logString}` : `${logString}`
 
     const { error } = await supabase
       .from('db_tasklist')
-      .update({
-        feedback: updatedFeedback,
-        last_updated: new Date().toISOString(),
-      })
+      .update({ feedback: updatedFeedback, last_updated: new Date().toISOString() })
       .eq('id', taskId)
 
     if (!error) {
-      setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, feedback: updatedFeedback } : t))
-      )
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, feedback: updatedFeedback } : t)))
       const inputEl = document.getElementById(`new-feedback-${taskId}`) as HTMLInputElement | null
       if (inputEl) inputEl.value = ''
+      
+      // ✅ INI YANG BENAR UNTUK TINDAK LANJUT
+      showToast('Tindak lanjut berhasil ditambahkan.', 'success')
     } else {
-      showModal('Gagal Menambah Tindak Lanjut', error.message, 'error')
+      showToast('Gagal menambah tindak lanjut.', 'error')
     }
   }
-
+  
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!detailTask) {
-      showModal('Detail Task Kosong', 'Detail task wajib diisi sebelum menyimpan!', 'alert')
+      showToast('Detail task wajib diisi!', 'error')
       return
     }
 
@@ -266,10 +257,12 @@ const showToast = (message: string, type: 'success' | 'error' | 'info' = 'succes
       setFeedback('')
       setBuktiUrl('')
       setIsCreateModalOpen(false)
-      showToast('Tindak lanjut berhasil ditambahkan.')
+      
+      // ✅ INI YANG BENAR UNTUK TASK BARU
+      showToast('Task baru berhasil ditambahkan.', 'success') 
       fetchTasks()
     } else {
-      showModal('Gagal Menambah Task', error.message, 'error')
+      showToast('Gagal menambah task: ' + error.message, 'error')
     }
   }
 
