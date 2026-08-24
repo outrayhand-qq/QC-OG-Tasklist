@@ -85,7 +85,7 @@ export default function TaskListLayout({
                     href="/dashboard"
                     className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition"
                   >
-                    <span>📊</span>
+                    <span></span>
                     <span>Dashboard Utama</span>
                   </Link>
                   <Link
@@ -171,33 +171,29 @@ export default function TaskListLayout({
           </nav>
         </div>
 
-        {/* Info Hak Akses di Sidebar Bawah */}
-        <div className="pt-6 border-t border-zinc-200/60 text-[11px] text-zinc-400">
-          Role Akses: <strong className="text-zinc-700 uppercase">{userRole || 'Loading...'}</strong>
-        </div>
-      </aside>
-
-      {/* Konten Utama Halaman */}
-      <div className="flex-1 flex flex-col overflow-x-auto">
-        
-        {/* ✅ USER BAR MINIMALIS DENGAN DROPDOWN */}
-        <div className="flex items-center justify-end px-6 py-3 bg-white border-b border-zinc-200 shrink-0">
+        {/* ✅ USER BAR DI POJOK KIRI BAWAH (Sidebar Bottom) */}
+        <div className="pt-6 border-t border-zinc-200/60">
           <div 
             className="relative"
             onMouseEnter={() => setShowDropdown(true)}
             onMouseLeave={() => setShowDropdown(false)}
           >
             {/* User Bar Trigger */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-zinc-100 cursor-pointer transition">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-100 cursor-pointer transition">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-xs font-bold text-zinc-700">
-                {getRoleDisplay(userRole)}
-              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-zinc-700 truncate">
+                  {getRoleDisplay(userRole)}
+                </div>
+                <div className="text-[10px] text-zinc-500 truncate">
+                  {userEmail || 'Loading...'}
+                </div>
+              </div>
             </div>
 
-            {/* Dropdown Menu */}
+            {/* Dropdown Menu - Muncul di atas trigger */}
             {showDropdown && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-lg border border-zinc-200 py-2 z-50">
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-zinc-200 py-2 z-50">
                 {/* Email User */}
                 <div className="px-4 py-2 border-b border-zinc-100">
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -249,7 +245,10 @@ export default function TaskListLayout({
             )}
           </div>
         </div>
+      </aside>
 
+      {/* Konten Utama Halaman */}
+      <div className="flex-1 flex flex-col overflow-x-auto">
         {/* Area Render Halaman Anak (Page) */}
         <div className="flex-1 p-6 md:p-8 overflow-y-auto">
           {children}
