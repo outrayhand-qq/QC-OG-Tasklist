@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { exportTasksToCSV } from '@/lib/export-csv'
 import { useRouter } from 'next/navigation'
+import CustomModal from '@/components/CustomModal'
 
 type Task = {
   id: string
@@ -88,6 +89,20 @@ export default function TeamLeaderConsole() {
   const [editFeedback, setEditFeedback] = useState('')
   const [editBuktiUrl, setEditBuktiUrl] = useState('')
 
+  // ✅ STATE UNTUK CUSTOM MODAL
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    type: 'confirm' | 'alert' | 'success' | 'error' | 'info'
+    onConfirm?: () => void
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'alert',
+  })
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const role = (localStorage.getItem('userRole') || '').toLowerCase().trim()
@@ -100,6 +115,16 @@ export default function TeamLeaderConsole() {
       else setSelectedDivisi('All')
     }
   }, [])
+
+  // ✅ HELPER UNTUK MENAMPILKAN MODAL
+  const showModal = (
+    title: string,
+    message: string,
+    type: 'confirm' | 'alert' | 'success' | 'error' | 'info' = 'alert',
+    onConfirm?: () => void
+  ) => {
+    setModalState({ isOpen: true, title, message, type, onConfirm })
+  }
 
   const fetchTasks = async () => {
     setLoading(true)
@@ -188,14 +213,14 @@ export default function TeamLeaderConsole() {
       const inputEl = document.getElementById(`new-feedback-${taskId}`) as HTMLInputElement | null
       if (inputEl) inputEl.value = ''
     } else {
-      alert('Gagal menambah tindak lanjut: ' + error.message)
+      showModal('Gagal Menambah Tindak Lanjut', error.message, 'error')
     }
   }
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!detailTask) {
-      alert('Detail task wajib diisi!')
+      showModal('Detail Task Kosong', 'Detail task wajib diisi sebelum menyimpan!', 'alert')
       return
     }
 
@@ -227,9 +252,10 @@ export default function TeamLeaderConsole() {
       setFeedback('')
       setBuktiUrl('')
       setIsCreateModalOpen(false)
+      showModal('Berhasil', 'Task baru berhasil ditambahkan.', 'success')
       fetchTasks()
     } else {
-      alert('Gagal menambah task: ' + error.message)
+      showModal('Gagal Menambah Task', error.message, 'error')
     }
   }
 
@@ -262,9 +288,10 @@ export default function TeamLeaderConsole() {
 
     if (!error) {
       setEditingTask(null)
+      showModal('Berhasil', 'Task berhasil diperbarui.', 'success')
       fetchTasks()
     } else {
-      alert('Gagal memperbarui task: ' + error.message)
+      showModal('Gagal Memperbarui Task', error.message, 'error')
     }
   }
 
@@ -291,7 +318,13 @@ export default function TeamLeaderConsole() {
         last_updated: new Date().toISOString() 
       })
       .eq('id', id)
-    if (!error) fetchTasks()
+      
+    if (!error) {
+      showModal('Status Diperbarui', `Status task berhasil diubah menjadi ${newStatus}.`, 'success')
+      fetchTasks()
+    } else {
+      showModal('Gagal Memperbarui Status', error.message, 'error')
+    }
   }
 
   const togglePic = (pic: string, isEdit = false) => {
@@ -404,6 +437,7 @@ export default function TeamLeaderConsole() {
     const dateStr = new Date().toISOString().split('T')[0]
     const fileName = `TL_${filterContext}_${dateStr}.csv`
     exportTasksToCSV(filteredTasks, fileName)
+    showModal('Export Berhasil', `File ${fileName} berhasil diunduh.`, 'success')
   }
 
   useEffect(() => {
@@ -885,7 +919,18 @@ export default function TeamLeaderConsole() {
         </div>
       )}
 
-      {/* MODAL CREATE & EDIT TASKS (Sama seperti sebelumnya) */}
+      {/* ✅ CUSTOM MODAL GLOBAL UNTUK SEMUA ALERT/CONFIRM */}
+      <CustomModal
+        isOpen={modalState.isOpen}
+        onClose={() => setModalState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.type === 'error' ? 'Tutup' : 'OK'}
+      />
+
+      {/* MODAL CREATE & EDIT TASKS */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
