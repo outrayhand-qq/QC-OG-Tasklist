@@ -502,7 +502,6 @@ export default function TeamLeaderConsole() {
     return null
   }
 
-  // Fungsi Parser untuk Membedah Format Log agar bisa tampil seperti Chat
   const parseFeedbackLine = (line: string) => {
     const match = line.match(/^\[(.*?)\] \((.*?)\):\s*(.*)$/);
     if (match) {
@@ -529,7 +528,6 @@ export default function TeamLeaderConsole() {
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
-          {/* KPI Badges - Diperbesar (text-sm, px-4, py-1.5) */}
           <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <button onClick={() => setActiveBadgeFilter(null)} className={`px-4 py-1.5 rounded border transition cursor-pointer ${!activeBadgeFilter ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'}`}>
               Total Task: <strong>{stats.total}</strong>
@@ -564,7 +562,6 @@ export default function TeamLeaderConsole() {
               </svg>
               Tambah Task
             </button>
-            {/* Tombol Refresh dengan Icon Baru yang Jelas */}
             <button onClick={fetchTasks} title="Refresh Data" className="p-2 bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-800 rounded shadow-2xs transition cursor-pointer flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -690,7 +687,6 @@ export default function TeamLeaderConsole() {
               const isExpanded = expandedHistory[task.id]
               const displayedLines = isExpanded ? feedbackLines : feedbackLines.slice(-2)
 
-              // Logika Pemisah (Section Header)
               let showActionHeader = false;
               let showClosedHeader = false;
 
@@ -718,7 +714,6 @@ export default function TeamLeaderConsole() {
                   <div className={`bg-white rounded-xl shadow-xs border border-zinc-200/90 overflow-hidden border-l-4 ${urgencyStyle.borderColor} transition hover:shadow-md`}>
                     <div className="p-5 space-y-4">
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                        
                         <div className="space-y-1.5 flex-1">
                           <div className="flex items-center gap-2">
                             <h3 className="font-bold text-zinc-900 text-sm leading-snug">{task.detail_task}</h3>
@@ -752,7 +747,6 @@ export default function TeamLeaderConsole() {
                             )}
                           </div>
 
-                          {/* AVATAR PIC - Pindah ke Kiri Bawah Deadline */}
                           {task.pic_assignment && (
                             <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-1">
                               {task.pic_assignment.split(',').map((pic, idx) => {
@@ -772,7 +766,6 @@ export default function TeamLeaderConsole() {
                           )}
                         </div>
 
-                        {/* BAGIAN KANAN ATAS (Tanpa Nama PIC) */}
                         <div className="flex flex-wrap items-center gap-2 text-xs shrink-0 border-t md:border-t-0 border-zinc-100 pt-2 md:pt-0">
                           <span className="px-2.5 py-1 rounded bg-zinc-100 text-zinc-700 font-medium border border-zinc-200">
                             {task.kategori || 'Daily Task Operasional'}
@@ -796,17 +789,13 @@ export default function TeamLeaderConsole() {
                             <option value="Closed">Closed</option>
                           </select>
                         </div>
-
                       </div>
 
-                      {/* HISTORY FEEDBACK THREAD (Desain Chat Rapi) */}
                       <div className="border-t border-zinc-100 pt-3 space-y-2 mt-2">
-                        
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
                             HISTORY FEEDBACK / TINDAK LANJUT
                           </span>
-                          {/* Tombol Lihat Semua Terlempar ke Kanan */}
                           {feedbackLines.length > 2 && (
                             <button onClick={() => setExpandedHistory(prev => ({ ...prev, [task.id]: !prev[task.id] }))} className="text-[11px] text-sky-600 font-bold hover:underline cursor-pointer">
                               {isExpanded ? 'Tutup' : `Lihat semua (${feedbackLines.length})`}
@@ -870,7 +859,6 @@ export default function TeamLeaderConsole() {
                           </div>
                         )}
                       </div>
-
                     </div>
                   </div>
                 </React.Fragment>
@@ -897,19 +885,7 @@ export default function TeamLeaderConsole() {
         </div>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xs border-t border-zinc-200/80 px-4 py-2 flex items-center justify-between text-xs shadow-md z-40">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-          <span className="text-zinc-700 font-medium">{userEmail}</span>
-          <span className="px-2.5 py-0.5 bg-zinc-900 text-white rounded text-[10px] font-extrabold tracking-wider uppercase">{displayRoleLabel}</span>
-        </div>
-        <button onClick={handleLogout} title="Keluar Sistem" className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded border border-rose-200 transition cursor-pointer flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-        </button>
-      </div>
-
+      {/* MODAL CREATE & EDIT TASKS (Sama seperti sebelumnya) */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
