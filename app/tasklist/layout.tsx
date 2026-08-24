@@ -15,6 +15,7 @@ export default function TaskListLayout({
   const [userRole, setUserRole] = useState<string>('')
   const [userEmail, setUserEmail] = useState<string>('')
   const [showDropdown, setShowDropdown] = useState(false)
+  const [dropdownTimeout, setDropdownTimeout] = useState<NodeJS.Timeout | null>(null)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   useEffect(() => {
@@ -58,10 +59,9 @@ export default function TaskListLayout({
 
   return (
     <>
-      {/* ✅ LAYOUT FREEZE: h-screen & overflow-hidden agar hanya konten yang scroll */}
       <div className="h-screen bg-zinc-50/50 flex flex-col md:flex-row overflow-hidden">
         
-        {/* ✅ SIDEBAR: shrink-0 & h-full (tidak ikut scroll) */}
+        {/* SIDEBAR - Tidak scroll */}
         <aside className="w-full md:w-64 bg-white border-r border-zinc-200/80 p-6 flex flex-col justify-between shrink-0 h-full">
           <div className="space-y-6">
             {/* Logo / Brand */}
@@ -77,7 +77,6 @@ export default function TaskListLayout({
             {/* Navigasi Menu */}
             <nav className="space-y-6 text-xs font-medium">
               
-              {/* MENU SPESIAL SUPERADMIN */}
               {isSuperAdmin && (
                 <div className="space-y-2">
                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block px-2">
@@ -102,7 +101,6 @@ export default function TaskListLayout({
                 </div>
               )}
 
-              {/* MENU OPERASIONAL HARIAN */}
               <div className="space-y-2">
                 <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block px-2">
                   Operasional Harian
@@ -116,13 +114,12 @@ export default function TaskListLayout({
                         : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
                     }`}
                   >
-                    <span>📋</span>
+                    <span></span>
                     <span>Task TL (QC & OG)</span>
                   </Link>
                 </div>
               </div>
 
-              {/* MENU MONITORING & RTS KHUSUS SUPERADMIN */}
               {isSuperAdmin && (
                 <div className="space-y-2">
                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block px-2">
@@ -140,7 +137,6 @@ export default function TaskListLayout({
                 </div>
               )}
 
-              {/* MENU RESOLUSI & KENDALA - SUPERADMIN & TLQC */}
               {(isSuperAdmin || userRole === 'tlqc') && (
                 <div className="space-y-2">
                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block px-2">
@@ -165,7 +161,7 @@ export default function TaskListLayout({
                           : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
                       }`}
                     >
-                      <span>🛡️</span>
+                      <span>️</span>
                       <span>Tracker Klaim</span>
                     </Link>
                   </div>
@@ -174,12 +170,18 @@ export default function TaskListLayout({
             </nav>
           </div>
 
-          {/* ✅ USER BAR DI POJOK KIRI BAWAH */}
+          {/* User Bar di Sidebar Bottom */}
           <div className="pt-6 border-t border-zinc-200/60">
             <div 
               className="relative"
-              onMouseEnter={() => setShowDropdown(true)}
-              onMouseLeave={() => setShowDropdown(false)}
+              onMouseEnter={() => {
+                if (dropdownTimeout) clearTimeout(dropdownTimeout)
+                setShowDropdown(true)
+              }}
+              onMouseLeave={() => {
+                const timeout = setTimeout(() => setShowDropdown(false), 200)
+                setDropdownTimeout(timeout)
+              }}
             >
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-100 cursor-pointer transition">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -193,9 +195,17 @@ export default function TaskListLayout({
                 </div>
               </div>
 
-              {/* Dropdown Menu */}
               {showDropdown && (
-                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-zinc-200 py-2 z-50">
+                <div 
+                  className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-zinc-200 py-2 z-50"
+                  onMouseEnter={() => {
+                    if (dropdownTimeout) clearTimeout(dropdownTimeout)
+                  }}
+                  onMouseLeave={() => {
+                    const timeout = setTimeout(() => setShowDropdown(false), 200)
+                    setDropdownTimeout(timeout)
+                  }}
+                >
                   <div className="px-4 py-2 border-b border-zinc-100">
                     <div className="flex items-center gap-2 text-xs text-zinc-500">
                       <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -245,16 +255,15 @@ export default function TaskListLayout({
           </div>
         </aside>
 
-        {/* ✅ MAIN CONTENT: flex-1 & overflow-hidden */}
+        {/* MAIN CONTENT - Bisa scroll */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* Area ini yang akan di-scroll */}
           <div className="flex-1 overflow-y-auto p-6 md:p-8">
             {children}
           </div>
         </div>
       </div>
 
-      {/* ✅ CUSTOM LOGOUT MODAL */}
+      {/* Custom Logout Modal */}
       <CustomModal
         isOpen={showLogoutModal}
         onClose={() => setShowLogoutModal(false)}

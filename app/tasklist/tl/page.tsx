@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { exportTasksToCSV } from '@/lib/export-csv'
 import { useRouter } from 'next/navigation'
 import CustomModal from '@/components/CustomModal'
+import Toast from '@/components/Toast'
 
 type Task = {
   id: string
@@ -102,6 +103,19 @@ export default function TeamLeaderConsole() {
     message: '',
     type: 'alert',
   })
+  const [toast, setToast] = useState<{
+  isOpen: boolean
+  message: string
+  type: 'success' | 'error' | 'info'
+}>({
+  isOpen: false,
+  message: '',
+  type: 'success',
+})
+
+const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+  setToast({ isOpen: true, message, type })
+}
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -252,7 +266,7 @@ export default function TeamLeaderConsole() {
       setFeedback('')
       setBuktiUrl('')
       setIsCreateModalOpen(false)
-      showModal('Berhasil', 'Task baru berhasil ditambahkan.', 'success')
+      showToast('Tindak lanjut berhasil ditambahkan.')
       fetchTasks()
     } else {
       showModal('Gagal Menambah Task', error.message, 'error')
@@ -320,7 +334,7 @@ export default function TeamLeaderConsole() {
       .eq('id', id)
       
     if (!error) {
-      showModal('Status Diperbarui', `Status task berhasil diubah menjadi ${newStatus}.`, 'success')
+      showToast(`Status berhasil diubah menjadi ${newStatus}.`)
       fetchTasks()
     } else {
       showModal('Gagal Memperbarui Status', error.message, 'error')
@@ -437,6 +451,7 @@ export default function TeamLeaderConsole() {
     const dateStr = new Date().toISOString().split('T')[0]
     const fileName = `TL_${filterContext}_${dateStr}.csv`
     exportTasksToCSV(filteredTasks, fileName)
+showToast(`File ${fileName} berhasil diunduh.`)
     showModal('Export Berhasil', `File ${fileName} berhasil diunduh.`, 'success')
   }
 
@@ -552,7 +567,9 @@ export default function TeamLeaderConsole() {
   const displayRoleLabel = isSuperAdmin ? 'SUPERADMIN' : userRole === 'tlqc' ? 'TL QC' : userRole === 'tlog' ? 'TL OUTGOING' : userRole.toUpperCase()
 
   return (
-    <main className="p-8 max-w-[1600px] w-full mx-auto space-y-6 pb-20">
+  <div className="h-full flex flex-col">
+    {/* HEADER - TIDAK SCROLL */}
+    <div className="shrink-0 space-y-6 pb-6">
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-2">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight text-zinc-900">
@@ -679,13 +696,16 @@ export default function TeamLeaderConsole() {
             {searchQuery && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Pencarian: "{searchQuery}" <button onClick={() => setSearchQuery('')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
             {selectedKategori !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Kategori: {selectedKategori} <button onClick={() => setSelectedKategori('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
             {selectedPriority !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Priority: {selectedPriority} <button onClick={() => setSelectedPriority('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
-            {selectedStatus !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Status: {selectedStatus} <button onClick={() => setSelectedStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
+            {selectedStatus !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">Status: {selectedStatus} <button onClick={() => setSelectedStatus('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1"></button></span>}
             {selectedPicFilter !== 'All' && <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded flex items-center gap-1 font-medium text-zinc-700">User: {selectedPicFilter} <button onClick={() => setSelectedPicFilter('All')} className="text-zinc-400 hover:text-rose-600 font-bold ml-1">✕</button></span>}
             <button onClick={() => { setSelectedKategori('All'); setSelectedPriority('All'); setSelectedStatus('All'); setSelectedPicFilter('All'); setSearchQuery(''); }} className="text-sky-600 hover:underline font-bold ml-1">Hapus semua filter</button>
           </div>
         )}
       </div>
+    </div>
 
+    {/* AREA TASK - BISA SCROLL */}
+    <div className="flex-1 overflow-y-auto">
       <div className="space-y-4">
         {loading ? (
           <div className="py-20 text-center text-xs text-zinc-400 font-bold uppercase tracking-widest bg-white rounded-xl border border-zinc-200 animate-pulse">
@@ -903,7 +923,7 @@ export default function TeamLeaderConsole() {
       </div>
 
       {filteredTasks.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border border-zinc-200 rounded-lg text-xs shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border border-zinc-200 rounded-lg text-xs shadow-sm mt-6">
           <div className="text-zinc-500 font-medium">
             Menampilkan <span className="font-bold text-zinc-850">{(currentPage - 1) * itemsPerPage + 1}</span> sampai <span className="font-bold text-zinc-850">{Math.min(currentPage * itemsPerPage, filteredTasks.length)}</span> dari <span className="font-bold text-zinc-850">{filteredTasks.length}</span> task
           </div>
@@ -918,132 +938,143 @@ export default function TeamLeaderConsole() {
           </div>
         </div>
       )}
+    </div>
 
-      {/* ✅ CUSTOM MODAL GLOBAL UNTUK SEMUA ALERT/CONFIRM */}
-      <CustomModal
-        isOpen={modalState.isOpen}
-        onClose={() => setModalState(prev => ({ ...prev, isOpen: false }))}
-        onConfirm={modalState.onConfirm}
-        title={modalState.title}
-        message={modalState.message}
-        type={modalState.type}
-        confirmText={modalState.type === 'error' ? 'Tutup' : 'OK'}
+    {/* Toast Notification */}
+    {toast.isOpen && (
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, isOpen: false }))}
       />
+    )}
 
-      {/* MODAL CREATE & EDIT TASKS */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-white">
-              <h3 className="font-extrabold text-sm text-zinc-900">Tambah Task TL Baru</h3>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-zinc-400 hover:text-black font-bold p-1 text-sm cursor-pointer">✕</button>
+    {/* Custom Modal untuk alert/confirm */}
+    <CustomModal
+      isOpen={modalState.isOpen}
+      onClose={() => setModalState(prev => ({ ...prev, isOpen: false }))}
+      onConfirm={modalState.onConfirm}
+      title={modalState.title}
+      message={modalState.message}
+      type={modalState.type}
+      confirmText={modalState.type === 'error' ? 'Tutup' : 'OK'}
+    />
+
+    {/* Modal Create Task */}
+    {isCreateModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+        <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-white">
+            <h3 className="font-extrabold text-sm text-zinc-900">Tambah Task TL Baru</h3>
+            <button onClick={() => setIsCreateModalOpen(false)} className="text-zinc-400 hover:text-black font-bold p-1 text-sm cursor-pointer">✕</button>
+          </div>
+          <form onSubmit={handleAddTask} className="p-5 space-y-4 overflow-y-auto text-xs">
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">Assign PIC (Opsional - Kosongkan jika untuk task pribadi)</label>
+              <div className="flex flex-wrap gap-1.5">
+                {PICS.map((pic) => (
+                  <button key={pic} type="button" onClick={() => togglePic(pic)} className={`h-8 px-3 text-xs font-medium border border-zinc-900 rounded-md transition cursor-pointer ${selectedPics.includes(pic) ? 'bg-black text-white font-bold' : 'bg-white text-zinc-800 hover:bg-zinc-100'}`}>
+                    {pic}
+                  </button>
+                ))}
+              </div>
             </div>
-            <form onSubmit={handleAddTask} className="p-5 space-y-4 overflow-y-auto text-xs">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Assign PIC (Opsional - Kosongkan jika untuk task pribadi)</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {PICS.map((pic) => (
-                    <button key={pic} type="button" onClick={() => togglePic(pic)} className={`h-8 px-3 text-xs font-medium border border-zinc-900 rounded-md transition cursor-pointer ${selectedPics.includes(pic) ? 'bg-black text-white font-bold' : 'bg-white text-zinc-800 hover:bg-zinc-100'}`}>
-                      {pic}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="block font-bold text-zinc-900">Prioritas</label>
-                  <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
-                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="block font-bold text-zinc-900">Deadline (SLA)</label>
-                  <input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer" />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Kategori Pilar</label>
-                <select value={kategori} onChange={(e) => setKategori(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                <label className="block font-bold text-zinc-900">Prioritas</label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Detail Task</label>
-                <textarea rows={3} placeholder="Tuliskan deskripsi..." value={detailTask} onChange={(e) => setDetailTask(e.target.value)} required className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
+                <label className="block font-bold text-zinc-900">Deadline (SLA)</label>
+                <input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer" />
               </div>
-              <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Tindak Lanjut / Feedback Awal</label>
-                <textarea rows={2} placeholder="Catatan tindak lanjut..." value={feedback} onChange={(e) => setFeedback(e.target.value)} className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Link Referensi</label>
-                <input type="text" placeholder="https://..." value={buktiUrl} onChange={(e) => setBuktiUrl(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none" />
-              </div>
-              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
-                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:text-black rounded cursor-pointer">Batal</button>
-                <button type="submit" className="px-5 py-2 text-xs font-bold bg-black text-white rounded-md hover:bg-zinc-800 transition cursor-pointer">Simpan Task</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {editingTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-white">
-              <h3 className="font-extrabold text-sm text-zinc-900">Edit Task</h3>
-              <button onClick={() => setEditingTask(null)} className="text-zinc-400 hover:text-black font-bold p-1 text-sm cursor-pointer">✕</button>
             </div>
-            <form onSubmit={handleUpdateTask} className="p-5 space-y-4 overflow-y-auto text-xs">
-              <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">PIC Assignment</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {PICS.map((pic) => (
-                    <button key={pic} type="button" onClick={() => togglePic(pic, true)} className={`h-8 px-3 text-xs font-medium border border-zinc-900 rounded-md transition cursor-pointer ${editPics.includes(pic) ? 'bg-black text-white font-bold' : 'bg-white text-zinc-800 hover:bg-zinc-100'}`}>
-                      {pic}
-                    </button>
-                  ))}
-                </div>
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">Kategori Pilar</label>
+              <select value={kategori} onChange={(e) => setKategori(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">Detail Task</label>
+              <textarea rows={3} placeholder="Tuliskan deskripsi..." value={detailTask} onChange={(e) => setDetailTask(e.target.value)} required className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">Tindak Lanjut / Feedback Awal</label>
+              <textarea rows={2} placeholder="Catatan tindak lanjut..." value={feedback} onChange={(e) => setFeedback(e.target.value)} className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">Link Referensi</label>
+              <input type="text" placeholder="https://..." value={buktiUrl} onChange={(e) => setBuktiUrl(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none" />
+            </div>
+            <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
+              <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:text-black rounded cursor-pointer">Batal</button>
+              <button type="submit" className="px-5 py-2 text-xs font-bold bg-black text-white rounded-md hover:bg-zinc-800 transition cursor-pointer">Simpan Task</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+
+    {/* Modal Edit Task */}
+    {editingTask && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+        <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-white">
+            <h3 className="font-extrabold text-sm text-zinc-900">Edit Task</h3>
+            <button onClick={() => setEditingTask(null)} className="text-zinc-400 hover:text-black font-bold p-1 text-sm cursor-pointer">✕</button>
+          </div>
+          <form onSubmit={handleUpdateTask} className="p-5 space-y-4 overflow-y-auto text-xs">
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">PIC Assignment</label>
+              <div className="flex flex-wrap gap-1.5">
+                {PICS.map((pic) => (
+                  <button key={pic} type="button" onClick={() => togglePic(pic, true)} className={`h-8 px-3 text-xs font-medium border border-zinc-900 rounded-md transition cursor-pointer ${editPics.includes(pic) ? 'bg-black text-white font-bold' : 'bg-white text-zinc-800 hover:bg-zinc-100'}`}>
+                    {pic}
+                  </button>
+                ))}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="block font-bold text-zinc-900">Prioritas</label>
-                  <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
-                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="block font-bold text-zinc-500 flex items-center gap-1"><span>🔒</span> Deadline</label>
-                  <input type="text" disabled value={formatDeadlineDisplay(editingTask.deadline) || 'Tidak ada deadline'} className="w-full h-10 px-3 border border-zinc-300 bg-zinc-100 text-zinc-500 font-mono rounded-md cursor-not-allowed" />
-                </div>
-              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Kategori Pilar</label>
-                <select value={editKategori} onChange={(e) => setEditKategori(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                <label className="block font-bold text-zinc-900">Prioritas</label>
+                <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Detail Task (Editable)</label>
-                <textarea rows={3} value={editDetailTask} onChange={(e) => setEditDetailTask(e.target.value)} required className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
+                <label className="block font-bold text-zinc-500 flex items-center gap-1"><span>🔒</span> Deadline</label>
+                <input type="text" disabled value={formatDeadlineDisplay(editingTask.deadline) || 'Tidak ada deadline'} className="w-full h-10 px-3 border border-zinc-300 bg-zinc-100 text-zinc-500 font-mono rounded-md cursor-not-allowed" />
               </div>
-              <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">History Feedback/Tindak Lanjut</label>
-                <textarea rows={3} placeholder="Catatan..." value={editFeedback} onChange={(e) => setEditFeedback(e.target.value)} className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="block font-bold text-zinc-900">Link Referensi</label>
-                <input type="text" placeholder="https://..." value={editBuktiUrl} onChange={(e) => setEditBuktiUrl(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none" />
-              </div>
-              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
-                <button type="button" onClick={() => setEditingTask(null)} className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:text-black rounded cursor-pointer">Batal</button>
-                <button type="submit" className="px-5 py-2 text-xs font-bold bg-black text-white rounded-md hover:bg-zinc-800 transition cursor-pointer">Simpan Perubahan</button>
-              </div>
-            </form>
-          </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">Kategori Pilar</label>
+              <select value={editKategori} onChange={(e) => setEditKategori(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs font-medium text-zinc-900 focus:outline-none cursor-pointer">
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">Detail Task (Editable)</label>
+              <textarea rows={3} value={editDetailTask} onChange={(e) => setEditDetailTask(e.target.value)} required className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">History Feedback/Tindak Lanjut</label>
+              <textarea rows={3} placeholder="Catatan..." value={editFeedback} onChange={(e) => setEditFeedback(e.target.value)} className="w-full p-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none resize-none" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-bold text-zinc-900">Link Referensi</label>
+              <input type="text" placeholder="https://..." value={editBuktiUrl} onChange={(e) => setEditBuktiUrl(e.target.value)} className="w-full h-10 px-3 border border-zinc-900 bg-white rounded-md text-xs focus:outline-none" />
+            </div>
+            <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
+              <button type="button" onClick={() => setEditingTask(null)} className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:text-black rounded cursor-pointer">Batal</button>
+              <button type="submit" className="px-5 py-2 text-xs font-bold bg-black text-white rounded-md hover:bg-zinc-800 transition cursor-pointer">Simpan Perubahan</button>
+            </div>
+          </form>
         </div>
-      )}
-    </main>
-  )
+      </div>
+    )}
+  </div>
+)
 }
